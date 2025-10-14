@@ -951,10 +951,22 @@ with tab_potencial:
     titulo_potencial = formatar_titulo_marcas("🎯 Análise de Potencial x Faturamento", marcas_selecionadas, marcas_disponiveis)
     st.subheader(titulo_potencial)
     
+    # Mapeamento entre marcas anonimizadas e nomes reais das unidades
+    # Este mapeamento deve ser ajustado conforme os dados reais
+    mapeamento_marcas_potencial = {
+        'MARCA A': 'UNIDADE SOROCABA',
+        'MARCA B': 'UNIDADE SAO PAULO', 
+        'MARCA C': 'UNIDADE FLORIANOPOLIS',
+        'MARCA D': 'UNIDADE CURITIBA'
+    }
+    
     try:
         # Carregar dados de embarques e calcular potencial
         agrupado_quantidade, agrupado_bu_potencial, embarques_potencial, embarques, hoje_str = etl_embarques.etl_embarques()
         potencial_faturamento = etl_embarques.calcular_potencial_faturamento(embarques, hoje_str)
+        
+        # Aplicar mapeamento de marcas no DataFrame de potencial
+        potencial_faturamento['Unid. Negócio'] = potencial_faturamento['Unid. Negócio'].replace(mapeamento_marcas_potencial)
 
         # Usar faturamento do período já filtrado pelo usuário (mês/dia selecionado)
         faturado_filtrado_data = faturado.copy()

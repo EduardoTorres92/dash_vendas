@@ -913,13 +913,15 @@ def obter_cores_marca():
         dict: Dicionário com o nome da marca como chave e a cor como valor.
     """
     return {
-        "UNIDADE SOROCABA": "#0000FF",           # azul
-        "UNIDADE SAO PAULO": "#8B0000",          # vermelho escuro
-        "UNIDADE FLORIANOPOLIS": "#FFA500",      # laranja
-        "UNIDADE CURITIBA": "#006400",           # verde escuro
-        "UNIDADE PORTO ALEGRE": "#FF69B4",       # rosa choque
-        "UNIDADE BRASILIA": "#FFFF00",           # amarelo
-        "Total": "#006400",                      # verde escuro
+        # Paleta do design system (ui_theme.SEQUENCIA_CATEGORICA): tons distinguíveis
+        # entre si e com contraste >= 3:1 sobre fundo branco.
+        "UNIDADE SOROCABA": "#1E40AF",           # azul
+        "UNIDADE SAO PAULO": "#DC2626",          # vermelho
+        "UNIDADE FLORIANOPOLIS": "#D97706",      # âmbar
+        "UNIDADE CURITIBA": "#059669",           # verde
+        "UNIDADE PORTO ALEGRE": "#7C3AED",       # violeta
+        "UNIDADE BRASILIA": "#0891B2",           # ciano
+        "Total": "#0F172A",                      # grafite
     }
 
 def exibir_cards_faturamento_por_marca_bruto(df_faturamento):
@@ -1639,15 +1641,8 @@ def obter_cores_devolucao():
     Returns:
         dict: Dicionário com cores por marca
     """
-    return {
-        "UNIDADE SOROCABA": "#1E40AF",           # azul
-        "UNIDADE SAO PAULO": "#991B1B",          # vermelho
-        "UNIDADE FLORIANOPOLIS": "#C2410C",      # laranja
-        "UNIDADE CURITIBA": "#374151",           # cinza
-        "UNIDADE PORTO ALEGRE": "#7C3AED",       # roxo
-        "UNIDADE BRASILIA": "#CA8A04",           # amarelo
-        "Total": "#065F46",                      # verde
-    }
+    # Mesmas cores de obter_cores_marca para manter a identidade de cada unidade
+    return dict(obter_cores_marca())
 
 
 

@@ -42,6 +42,17 @@ Este projeto oferece uma solução completa para análise de dados de faturament
 - ✅ Valores mantidos proporcionais aos originais
 - ✅ Impossível reverter para dados originais
 
+## 🎨 Design System
+
+O layout segue a direção visual gerada com a skill **UI/UX Pro Max** para o tipo de produto *Analytics/Financial Dashboard*:
+
+- **Estilo**: Data-Dense Dashboard + Minimal Swiss — cards compactos, grade enxuta, foco nos números.
+- **Paleta**: azul de dados `#1E40AF`, destaque âmbar `#D97706`, fundo `#F8FAFC`, positivo `#059669`, negativo `#DC2626`.
+- **Tipografia**: Fira Sans (texto) + Fira Code (valores, com algarismos tabulares).
+- **Acessibilidade**: contraste ≥ 4.5:1, variações com seta e sinal (não só cor), sem emojis como ícones, `prefers-reduced-motion` respeitado.
+
+Tokens, CSS global, template Plotly (`dash_vendas`) e componentes (cabeçalho, seções, cards de KPI e de meta) ficam em `ui_theme.py`; o tema base do Streamlit está em `.streamlit/config.toml`.
+
 ## 🚀 Instalação e Configuração
 
 ### Pré-requisitos
@@ -90,6 +101,8 @@ O dashboard será aberto automaticamente no seu navegador em `http://localhost:8
 ```
 Projeto Dash/
 ├── faturamento.py              # Dashboard principal (Streamlit)
+├── ui_theme.py                 # Design system (tokens, CSS, template Plotly, componentes)
+├── .streamlit/config.toml      # Tema base do Streamlit
 ├── ETL_faturamento.py          # ETL de dados de faturamento
 ├── ETL_devolucao.py            # ETL de devoluções
 ├── ETL_embarques.py            # ETL de embarques

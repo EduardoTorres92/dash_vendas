@@ -44,19 +44,54 @@ st.set_page_config(
 )
 ui.aplicar_tema()
 
+### Fonte de dados
+# Arquivos enviados pela tela inicial (dados reais, só em memória) ou demonstração.
+import fonte_dados
+
+COLUNAS_ESFT0100 = (
+    etl_faturamento.COLUNAS_FATURAMENTO
+    + etl_faturamento.COLUNAS_DEVOLUCAO
+    + etl_devolucao.COLUNAS_DEVOLUCAO
+)
+FONTE = fonte_dados.obter_fonte(COLUNAS_ESFT0100)
+
+
+@st.cache_data(max_entries=1, show_spinner="Lendo o relatório de faturamento...")
+def ler_dados_brutos(chave, _conteudo):
+    """Lê o CSV enviado uma vez por conteúdo (`chave`); o conteúdo não entra no hash."""
+    return fonte_dados.ler_esft0100(_conteudo, COLUNAS_ESFT0100)
+
+
+def dados_brutos():
+    """DataFrame do arquivo enviado, ou None no modo demonstração."""
+    return ler_dados_brutos(FONTE.chave, FONTE.csv) if FONTE.csv is not None else None
+
+
 # OTIMIZAÇÃO: Sistema de cache para dados já carregados
-@st.cache_data(ttl=300)  # Cache por 5 minutos
-def carregar_dados_com_cache():
+@st.cache_data(max_entries=1, show_spinner="Processando dados de faturamento...")
+def carregar_dados_com_cache(chave, anonimizar):
     """
-    Carrega dados com cache para evitar recarregamentos desnecessários
+    Carrega dados com cache para evitar recarregamentos desnecessários.
+    `chave` identifica a fonte de dados atual (arquivo enviado ou demonstração).
     """
-    faturado = etl_faturamento.carregar_dados_faturamento()
-    df_devolucao_card = etl_devolucao.carregar_dados_devolucao()
+    bruto = dados_brutos()
+    faturado = etl_faturamento.carregar_dados_faturamento(bruto, anonimizar)
+    df_devolucao_card = etl_devolucao.carregar_dados_devolucao(bruto, anonimizar)
     cores_marca = etl_faturamento.obter_cores_marca()
     return faturado, df_devolucao_card, cores_marca
 
 # Carregar dados usando ETL centralizado com cache
-faturado, df_devolucao_card, cores_marca = carregar_dados_com_cache()
+faturado, df_devolucao_card, cores_marca = carregar_dados_com_cache(FONTE.chave, FONTE.anonimizar)
+
+if faturado.empty:
+    st.error(
+        "Nenhum registro de faturamento válido foi encontrado no arquivo. Confira se é o relatório "
+        "ESFT0100 completo (séries 3 e 12, tipos de operação de receita, bonificação ou transferência)."
+    )
+    if st.button("Trocar dados"):
+        fonte_dados.trocar_dados()
+        st.rerun()
+    st.stop()
 
 # Filtrar marcas indesejadas que podem ter passado pelo processamento
 marcas_indesejadas_finais = ['?', 'MTK CD SP']
@@ -132,6 +167,7 @@ if 'Dt Emis NF' in faturado.columns and len(faturado) > 0:
         # Seletor de filtro de data no menu lateral
         with st.sidebar:
             ui.marca_sidebar()
+            fonte_dados.resumo_sidebar(FONTE)
             st.subheader("Período")
             # Primeiro selecionar o tipo de filtro
             tipo_filtro = st.selectbox(
@@ -371,7 +407,7 @@ def calcular_variacoes_mes_anterior_todas_marcas(faturamento_por_marca, tipo_fil
             return {marca: 0.0 for marca in faturamento_por_marca['Marca']}
         
         # OTIMIZAÇÃO: Usar dados já carregados com cache
-        faturado_completo, _, _ = carregar_dados_com_cache()
+        faturado_completo, _, _ = carregar_dados_com_cache(FONTE.chave, FONTE.anonimizar)
         
         if len(faturado_completo) == 0:
             return {marca: 0.0 for marca in faturamento_por_marca['Marca']}
@@ -462,7 +498,12 @@ marcas_label = (
 ui.cabecalho_pagina(
     "Faturamento",
     "Faturamento líquido, devoluções, potencial e lead time por unidade de negócio.",
-    chips=[("Período", periodo_label), ("Unidades", marcas_label), ("Receita", filtro_receita)],
+    chips=[
+        ("Dados", "Demonstração" if FONTE.demonstracao else "Arquivo carregado"),
+        ("Período", periodo_label),
+        ("Unidades", marcas_label),
+        ("Receita", filtro_receita),
+    ],
 )
 
 ui.secao(
@@ -885,8 +926,12 @@ with tab_potencial:
     }
     
     try:
+        if not FONTE.tem_embarques:
+            raise fonte_dados.SemEmbarques()
         # Carregar dados de embarques e calcular potencial
-        agrupado_quantidade, agrupado_bu_potencial, embarques_potencial, embarques, hoje_str = etl_embarques.etl_embarques()
+        agrupado_quantidade, agrupado_bu_potencial, embarques_potencial, embarques, hoje_str = etl_embarques.etl_embarques(
+            FONTE.arquivo_embarques(), FONTE.anonimizar
+        )
         potencial_faturamento = etl_embarques.calcular_potencial_faturamento(embarques, hoje_str)
         
         # Aplicar mapeamento de marcas no DataFrame de potencial
@@ -1104,6 +1149,11 @@ with tab_potencial:
         else:
             st.warning("Nenhum dado de potencial encontrado")
             
+    except fonte_dados.SemEmbarques:
+        st.info(
+            "Para ver o potencial de faturamento, carregue também a planilha de embarques (.xlsx). "
+            "Use **Trocar dados** na barra lateral."
+        )
     except Exception as e:
         st.error(f"Erro ao carregar dados de potencial: {str(e)}")
         st.info("Verifique se o arquivo de embarques está disponível e acessível")
@@ -1771,13 +1821,13 @@ with tab_lead_time_4:
 ui.secao("Devoluções", "Valores devolvidos no período, por marca e por item.")
 
 # Carregar dados de devolução com cache
-@st.cache_data(ttl=300)
-def carregar_dados_devolucao_com_cache():
-    """Carrega dados de devolução com cache."""
-    return etl_faturamento.carregar_dados_devolucao()
+@st.cache_data(max_entries=1, show_spinner="Processando devoluções...")
+def carregar_dados_devolucao_com_cache(chave, anonimizar):
+    """Carrega dados de devolução com cache (`chave` identifica a fonte de dados)."""
+    return etl_faturamento.carregar_dados_devolucao(dados_brutos(), anonimizar)
 
 # Carregar dados de devolução
-df_devolucao = carregar_dados_devolucao_com_cache()
+df_devolucao = carregar_dados_devolucao_com_cache(FONTE.chave, FONTE.anonimizar)
 
 # Aplicar filtros de data se existirem
 if 'faturado_filtrado' in locals() and len(faturado_filtrado) > 0:

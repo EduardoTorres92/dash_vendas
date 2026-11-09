@@ -193,7 +193,7 @@ def anonimizar_pedidos(df):
     
     return df
 
-def etl_embarques():
+def etl_embarques(arquivo=None, anonimizar=True):
     colunas = [
         'Estab',
         'Unid. Negócio',
@@ -214,12 +214,18 @@ def etl_embarques():
     arquivo_falso = os.path.join(current_dir, 'embarques_falsos.xlsx')
     arquivo_original = os.path.join(current_dir, 'AAB-PF - REPORT DIÁRIO FATURAMENTO 2025 - AAB.xlsx')
     
-    if os.path.exists(arquivo_falso):
+    # `arquivo`: planilha enviada pela tela do dashboard (caminho ou arquivo em memória)
+    if arquivo is not None:
+        excel_path = arquivo
+        eh_original = True
+    elif os.path.exists(arquivo_falso):
         print("⚡ Carregando embarques falsos (dados anonimizados)...")
         excel_path = arquivo_falso
+        eh_original = False
     else:
         print("📂 Carregando embarques originais...")
         excel_path = arquivo_original
+        eh_original = True
     
     embarques = pd.read_excel(
         excel_path,
@@ -227,7 +233,7 @@ def etl_embarques():
     )
     
     # Anonimizar pedidos apenas se for arquivo original
-    if excel_path == arquivo_original:
+    if eh_original and anonimizar:
         embarques = anonimizar_pedidos(embarques)
     
     # ETL GERAL
@@ -238,7 +244,7 @@ def etl_embarques():
     hoje_str = datetime.today().strftime('%d/%m/%Y')
     
     # Processar canais apenas se for arquivo original (arquivo falso já vem categorizado)
-    if excel_path == arquivo_original and 'Desc Canal' in embarques.columns:
+    if eh_original and 'Desc Canal' in embarques.columns:
         embarques['Desc Canal'] = embarques['Desc Canal'].fillna('N/A')
         
         # Mapeamento de canais específicos para categorias mais amplas

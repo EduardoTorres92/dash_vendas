@@ -201,9 +201,20 @@ def anonimizar_pedidos(df):
     
     return df
 
-def carregar_dados_devolucao():
+COLUNAS_DEVOLUCAO = [
+    'Marca', 'Deposito', 'Razao Social', 'Estado', 'Ped Cliente', 'Receita',
+    'Tipo Oper', 'Serie', 'Nota Fiscal', 'Dt Emis NF',
+    'Item', 'Desc Item', 'Localização', 'Quantidade', 'Vl Net Livro', 'Nro Embarque', 'Canal Venda Cliente'
+]
+
+
+def carregar_dados_devolucao(df_bruto=None, anonimizar=True):
     """
     Carrega e processa os dados de devolução.
+
+    Com `df_bruto` (ESFT0100 no formato original, por exemplo o arquivo
+    enviado pela tela do dashboard), processa esses dados; sem ele, lê o
+    ESFT0100.csv da pasta do projeto.
     Retorna DataFrame com dados de devolução processados.
     """
     try:
@@ -214,19 +225,15 @@ def carregar_dados_devolucao():
         print(f"DEBUG ETL_devolucao: Tentando carregar arquivo de: {caminho_devolucao}")
         print(f"DEBUG ETL_devolucao: Arquivo existe? {os.path.exists(caminho_devolucao)}")
 
-        # Definir colunas necessárias para devolução
-        colunas = [
-            'Marca', 'Deposito', 'Razao Social', 'Estado', 'Ped Cliente', 'Receita',
-            'Tipo Oper', 'Serie', 'Nota Fiscal', 'Dt Emis NF',
-            'Item', 'Desc Item', 'Localização', 'Quantidade', 'Vl Net Livro', 'Nro Embarque', 'Canal Venda Cliente'
-        ]
-        
         # Carregar dados de devolução
-        df_devolucao = pd.read_csv(caminho_devolucao, sep=';', encoding='latin1', usecols=colunas, dtype={'Nota Fiscal': str, 'Nro Embarque': str})
+        if df_bruto is not None:
+            df_devolucao = df_bruto[COLUNAS_DEVOLUCAO].copy()
+        else:
+            df_devolucao = pd.read_csv(caminho_devolucao, sep=';', encoding='latin1', usecols=COLUNAS_DEVOLUCAO, dtype={'Nota Fiscal': str, 'Nro Embarque': str})
         print(f"DEBUG ETL_devolucao: Dados carregados. Total de registros: {len(df_devolucao)}")
         
         # Processar dados
-        df_devolucao = processar_dados_devolucao(df_devolucao)
+        df_devolucao = processar_dados_devolucao(df_devolucao, anonimizar)
         print(f"DEBUG ETL_devolucao: Dados processados. Total de registros após processamento: {len(df_devolucao)}")
       
         return df_devolucao
@@ -238,16 +245,17 @@ def carregar_dados_devolucao():
         return pd.DataFrame()
 
 
-def processar_dados_devolucao(df_devolucao):
+def processar_dados_devolucao(df_devolucao, anonimizar=True):
     """
     Processa e limpa os dados de devolução.
     """
     print(f"DEBUG processar_dados_devolucao: Iniciando processamento com {len(df_devolucao)} registros")
-    
+
     # Anonimizar dados de Item, Razão Social e Pedidos
-    df_devolucao = anonimizar_itens(df_devolucao)
-    df_devolucao = anonimizar_razao_social(df_devolucao)
-    df_devolucao = anonimizar_pedidos(df_devolucao)
+    if anonimizar:
+        df_devolucao = anonimizar_itens(df_devolucao)
+        df_devolucao = anonimizar_razao_social(df_devolucao)
+        df_devolucao = anonimizar_pedidos(df_devolucao)
     
     # Categorizar Tipo Oper antes de filtrar
     print(f"DEBUG: Tipos de operação únicos antes da categorização: {df_devolucao['Tipo Oper'].unique()}")

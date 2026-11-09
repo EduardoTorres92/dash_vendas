@@ -6,3 +6,19 @@ backgroundColor = "#F8FAFC"
 secondaryBackgroundColor = "#F1F5F9"
 textColor = "#0F172A"
 font = "sans serif"
+
+# Uso local: o painel só aceita conexões deste computador.
+[server]
+address = "127.0.0.1"
+port = 8501
+# Tamanho máximo dos arquivos enviados pela tela (MB)
+maxUploadSize = 1024
+
+[browser]
+serverAddress = "localhost"
+# Não envia estatísticas de uso para o Streamlit
+gatherUsageStats = false
+
+[client]
+# Esconde o menu de deploy na nuvem do Streamlit
+toolbarMode = "minimal"

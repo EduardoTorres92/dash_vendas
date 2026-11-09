@@ -1,0 +1,8 @@
+# Tema base (direção visual UI/UX Pro Max: Analytics Dashboard, Data-Dense + Minimal Swiss)
+[theme]
+base = "light"
+primaryColor = "#1E40AF"
+backgroundColor = "#F8FAFC"
+secondaryBackgroundColor = "#F1F5F9"
+textColor = "#0F172A"
+font = "sans serif"

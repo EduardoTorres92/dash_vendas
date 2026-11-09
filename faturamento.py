@@ -34,11 +34,15 @@ spec_embarques.loader.exec_module(etl_embarques)
 
     
 
+import ui_theme as ui
+
 st.set_page_config(
-    page_title="Faturamento",
-    page_icon="💰",
-    layout="wide"
+    page_title="Faturamento | Dash Vendas",
+    page_icon=":material/monitoring:",
+    layout="wide",
+    initial_sidebar_state="auto",
 )
+ui.aplicar_tema()
 
 # OTIMIZAÇÃO: Sistema de cache para dados já carregados
 @st.cache_data(ttl=300)  # Cache por 5 minutos
@@ -127,9 +131,11 @@ if 'Dt Emis NF' in faturado.columns and len(faturado) > 0:
 
         # Seletor de filtro de data no menu lateral
         with st.sidebar:
+            ui.marca_sidebar()
+            st.subheader("Período")
             # Primeiro selecionar o tipo de filtro
             tipo_filtro = st.selectbox(
-                "Tipo de Filtro:",
+                "Tipo de filtro",
                 options=["Por Mês", "Todos os Dados"],
                 index=0,
                 help="Escolha como deseja filtrar os dados"
@@ -139,7 +145,7 @@ if 'Dt Emis NF' in faturado.columns and len(faturado) > 0:
             
             if tipo_filtro == "Por Mês":
                 mes_selecionado = st.selectbox(
-                    "Selecione o Mês:",
+                    "Mês",
                     options=opcoes_meses,
                     index=len(opcoes_meses)-1 if opcoes_meses else 0,
                     help="Selecione o mês para filtrar os dados"
@@ -149,9 +155,10 @@ if 'Dt Emis NF' in faturado.columns and len(faturado) > 0:
             st.markdown("---")
             
             # Seletor de marcas (multi-select)
+            st.subheader("Unidades")
             marcas_disponiveis = sorted(faturado['Marca'].dropna().unique())
             marcas_selecionadas = st.multiselect(
-                "Selecione as Marcas:",
+                "Marcas",
                 options=marcas_disponiveis,
                 default=marcas_disponiveis,  # Por padrão, todas as marcas são selecionadas
                 help="Escolha uma ou mais marcas para filtrar os dados"
@@ -161,11 +168,11 @@ if 'Dt Emis NF' in faturado.columns and len(faturado) > 0:
             st.markdown("---")
             
             # Filtro de Dia (menu lateral) - depende do mês selecionado
-            st.subheader("📅 Filtro de Dia")
+            st.subheader("Dia")
             
             # Seletor de dia (1-31)
             dia_selecionado = st.selectbox(
-                "Selecionar Dia:",
+                "Dia do mês",
                 options=["Todos os dias"] + [f"Dia {i}" for i in range(1, 32)],
                 index=0,
                 help="Selecione um dia específico do mês para filtrar os dados"
@@ -175,8 +182,9 @@ if 'Dt Emis NF' in faturado.columns and len(faturado) > 0:
             st.markdown("---")
             
             # Filtro de Receita (radiobox)
+            st.subheader("Receita")
             filtro_receita = st.radio(
-                "Tipo de Receita:",
+                "Tipo de receita",
                 options=["Ambas", "Sim", "Não"],
                 index=0,  # "Ambas" como padrão
                 help="Sim = Receitas normais (1-Receita, 20-Receita Revenda) | Não = Brindes/Transferências (9-Brindes, 15-Transferencia) | Ambas = Todos os tipos"
@@ -245,7 +253,7 @@ if 'Dt Emis NF' in faturado.columns and len(faturado) > 0:
         # Se filtro_receita == "Ambas", não aplica filtro adicional
                 
     else:
-        st.warning("⚠️ Nenhum dado válido encontrado")
+        st.warning("Nenhum dado válido encontrado")
 else:
     st.warning("Coluna 'Dt Emis NF' não encontrada no dataset")
 
@@ -253,7 +261,7 @@ faturamento_diario = faturado.groupby("Dt Emis NF", as_index=False)[
     "Vl Net Livro"
 ].sum()
 
-# 🪄 Formatar valores para tooltip e texto no gráfico
+# Formatar valores para tooltip e texto no gráfico
 faturamento_diario["vl_formatado"] = faturamento_diario["Vl Net Livro"].apply(
     lambda x: formatar_valor_seguro(x, "currency")
 )
@@ -443,122 +451,87 @@ def calcular_variacao_mes_anterior(marca_atual, valor_atual, tipo_filtro, mes_se
     return 0.0
 
 # Mostrar informações do filtro aplicado
-titulo_principal = formatar_titulo_marcas("💰 Faturamento Líquido por Marca", marcas_selecionadas, marcas_disponiveis)
-st.markdown(f"### {titulo_principal}")
+# Cabeçalho da página com o contexto dos filtros ativos
+periodo_label = mes_selecionado if (tipo_filtro == "Por Mês" and mes_selecionado) else "Todo o histórico"
+if dia_selecionado and dia_selecionado != "Todos os dias":
+    periodo_label = f"{periodo_label} · {dia_selecionado}"
+marcas_label = (
+    "Todas" if not marcas_selecionadas or len(marcas_selecionadas) == len(marcas_disponiveis)
+    else f"{len(marcas_selecionadas)} de {len(marcas_disponiveis)}"
+)
+ui.cabecalho_pagina(
+    "Faturamento",
+    "Faturamento líquido, devoluções, potencial e lead time por unidade de negócio.",
+    chips=[("Período", periodo_label), ("Unidades", marcas_label), ("Receita", filtro_receita)],
+)
+
+ui.secao(
+    formatar_titulo_marcas("Faturamento líquido por marca", marcas_selecionadas, marcas_disponiveis),
+    "Líquido = bruto + cut-off inicial − cut-off − devoluções. Variação comparada ao mês anterior.",
+)
 
 # OTIMIZAÇÃO: Calcular todas as variações de uma vez
 variacoes_todas_marcas = calcular_variacoes_mes_anterior_todas_marcas(faturamento_por_marca, tipo_filtro, mes_selecionado)
 
-# Exibir cards de faturamento líquido com detalhes - OTIMIZADO
-colunas = st.columns(len(faturamento_liquido_por_marca))
-for idx, (marca, valor_liquido) in enumerate(faturamento_liquido_por_marca.items()):
-    col = colunas[idx]
-    
-    # Valores para o card
-    faturamento_bruto = faturamento_dict.get(marca, 0)
-    devolucao = devolucao_dict.get(marca, 0)
-    cut_off = cut_off_por_marca.get(marca, 0)
-    cut_off_inicial = cut_off_inicial_por_marca.get(marca, 0)
-    
-    # Formatação dos valores
-    faturamento_liquido_formatado = formatar_valor_seguro(valor_liquido, "currency")
-    valor_formatado = formatar_valor_seguro(faturamento_bruto, "currency")
-    cut_off_formatado = formatar_valor_seguro(cut_off, "currency")
-    cut_off_inicial_formatado = formatar_valor_seguro(cut_off_inicial, "currency")
-    devolucao_formatado = formatar_valor_seguro(devolucao, "currency")
-    
-    # Calcular percentual do faturamento bruto
-    percentual_atual = (faturamento_bruto / total_geral * 100) if total_geral > 0 else 0
-    
-    # OTIMIZAÇÃO: Usar variação pré-calculada
-    variacao_percentual = variacoes_todas_marcas.get(marca, 0.0)
-    
-    # Determinar cor da variação
-    cor_variacao = "#28a745" if variacao_percentual >= 0 else "#dc3545"
-    simbolo_variacao = "↗️" if variacao_percentual >= 0 else "↘️"
-    
-    # Cor da marca
-    cor_marca = cores_marca.get(marca.upper(), "#6c757d")
-    
-    with col:
-        st.markdown(f"""
-        <div style="
-            background: #B0BFCC; 
-            border-radius: 15px; 
-            padding: 20px 15px; 
-            margin-bottom: 15px; 
-            box-shadow: 0 6px 20px rgba(0,0,0,0.1); 
-            text-align: center;
-            border: 1px solid rgba(255,255,255,0.2);
-        ">
-            <div style="font-size: 18px; font-weight: bold; color: white; margin-bottom: 10px;">
-                {marca}
-            </div>
-            <div style="font-size: 24px; font-weight: bold; color: white; margin-bottom: 8px;">
-                {faturamento_liquido_formatado}
-            </div>
-            <div style="font-size: 12px; color: {cor_variacao}; font-weight: bold; margin-bottom: 15px;">
-                {simbolo_variacao} {variacao_percentual:+.1f}% vs mês anterior
-            </div>
-            <div style="
-                background: rgba(255,255,255,0.15); 
-                border-radius: 8px; 
-                padding: 10px; 
-                font-size: 11px; 
-                color: white;
-                line-height: 1.4;
-            ">
-                <div style="margin-bottom: 5px;">
-                    <strong>Bruto:</strong> {valor_formatado} ({percentual_atual:.1f}%)
-                </div>
-                <div style="margin-bottom: 3px;">
-                    <strong>Cut-off Inicial:</strong> {cut_off_inicial_formatado}
-                </div>
-                <div style="margin-bottom: 3px;">
-                    <strong>Cut-off:</strong> {cut_off_formatado}
-                </div>
-                <div>
-                    <strong>Devoluções:</strong> {devolucao_formatado}
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+# Exibir cards de faturamento líquido em grade (até 3 por linha, para valores legíveis)
+itens_cards = list(faturamento_liquido_por_marca.items())
+cards_por_linha = min(max(len(itens_cards), 1), 3)
+for inicio in range(0, len(itens_cards), cards_por_linha):
+    colunas = st.columns(cards_por_linha)
+    for col, (marca, valor_liquido) in zip(colunas, itens_cards[inicio:inicio + cards_por_linha]):
+        faturamento_bruto = faturamento_dict.get(marca, 0)
+        devolucao = devolucao_dict.get(marca, 0)
+        cut_off = cut_off_por_marca.get(marca, 0)
+        cut_off_inicial = cut_off_inicial_por_marca.get(marca, 0)
+        percentual_atual = (faturamento_bruto / total_geral * 100) if total_geral > 0 else 0
+        variacao_percentual = variacoes_todas_marcas.get(marca, 0.0)
+
+        with col:
+            st.markdown(
+                ui.kpi_card_html(
+                    rotulo=marca,
+                    valor=formatar_valor_seguro(valor_liquido, "currency"),
+                    cor=cores_marca.get(marca.upper(), ui.CORES["texto_fraco"]),
+                    delta=ui.delta_html(variacao_percentual),
+                    detalhes=[
+                        ("Bruto", formatar_valor_seguro(faturamento_bruto, "currency")),
+                        ("Participação no bruto", f"{percentual_atual:.1f}%".replace(".", ",")),
+                        ("Cut-off inicial", formatar_valor_seguro(cut_off_inicial, "currency")),
+                        ("Cut-off", formatar_valor_seguro(cut_off, "currency")),
+                        ("Devoluções", formatar_valor_seguro(devolucao, "currency")),
+                    ],
+                ),
+                unsafe_allow_html=True,
+            )
 
 
 
 
 # Primeiro grupo de abas - Análises
-tab_unidade_negocio, tab_canal_venda, tab_ontem = st.tabs(["📊 Análise por Unidade de Negócio", "🛒 Análise por Canal de Venda por Marca", "📅 Relatório do Dia Anterior por Marca"])
+ui.secao("Análises por unidade e canal", "Composição do faturamento por unidade de negócio, canal de venda e dia anterior.")
+tab_unidade_negocio, tab_canal_venda, tab_ontem = st.tabs(["Análise por Unidade de Negócio", "Análise por Canal de Venda por Marca", "Relatório do Dia Anterior por Marca"])
 
 with tab_unidade_negocio:
     # Análise por Unidade de Negócio
-    titulo_unidade = formatar_titulo_marcas("📊 Análise por Unidade de Negócio", marcas_selecionadas, marcas_disponiveis)
+    titulo_unidade = formatar_titulo_marcas("Análise por Unidade de Negócio", marcas_selecionadas, marcas_disponiveis)
     st.subheader(titulo_unidade)
     
     analise_unidade_negocio = etl_faturamento.analisar_faturamento_por_unidade_negocio(faturado)
 
     # Formatar valores para exibição
-    analise_unidade_negocio['VALOR_NET_Formatado'] = analise_unidade_negocio['VALOR_NET'].apply(
-        lambda x: formatar_valor_seguro(x, "currency")
-    )
-    analise_unidade_negocio['Ticket_Medio_Formatado'] = analise_unidade_negocio['Ticket_Medio'].apply(
-        lambda x: formatar_valor_seguro(x, "currency")
-    )
+
+
 
     # Criar DataFrame para exibição com colunas formatadas
-    df_exibicao = analise_unidade_negocio[['Unidade_de_Negocio', 'VALOR_NET_Formatado', 'QTD_NFs', 'Ticket_Medio_Formatado']].copy()
+    df_exibicao = analise_unidade_negocio[['Unidade_de_Negocio', 'VALOR_NET', 'QTD_NFs', 'Ticket_Medio']].copy()
     df_exibicao.columns = ['Unidade de Negócio', 'VALOR NET', 'QTD. NFs', 'Ticket médio']
 
     # Exibir tabela formatada
-    st.dataframe(
-        df_exibicao,
-        use_container_width=True,
-        hide_index=True
-    )
+    ui.tabela(df_exibicao, hide_index=True)
 
 with tab_canal_venda:
     # Análise por Canal de Venda por Marca
-    titulo_canal = formatar_titulo_marcas("🛒 Análise por Canal de Venda por Marca", marcas_selecionadas, marcas_disponiveis)
+    titulo_canal = formatar_titulo_marcas("Análise por Canal de Venda por Marca", marcas_selecionadas, marcas_disponiveis)
     st.subheader(titulo_canal)
     
     analise_canal_por_marca = etl_faturamento.analisar_canal_venda_por_marca(faturado)
@@ -569,32 +542,24 @@ with tab_canal_venda:
         cores_marca = etl_faturamento.obter_cores_marca()
         
         # Criar lista de abas
-        tabs = st.tabs([f"🏷️ {marca}" for marca in analise_canal_por_marca.keys()])
+        tabs = st.tabs([f"{marca}" for marca in analise_canal_por_marca.keys()])
         
         for idx, (marca, df_marca) in enumerate(analise_canal_por_marca.items()):
             with tabs[idx]:
                 # Formatar valores para exibição
-                df_marca['VALOR_NET_Formatado'] = df_marca['VALOR_NET'].apply(
-                    lambda x: formatar_valor_seguro(x, "currency")
-                )
-                df_marca['Ticket_Medio_Formatado'] = df_marca['Ticket_Medio'].apply(
-                    lambda x: formatar_valor_seguro(x, "currency")
-                )
+
+
                 
                 # Criar DataFrame para exibição com colunas formatadas que corresponde à imagem
-                df_exibicao = df_marca[['Unidade_Negocio', 'VALOR_NET_Formatado', 'QTD_NFs', 'Ticket_Medio_Formatado']].copy()
+                df_exibicao = df_marca[['Unidade_Negocio', 'VALOR_NET', 'QTD_NFs', 'Ticket_Medio']].copy()
                 df_exibicao.columns = ['Unidade de Negócio', 'VALOR NET', 'QTD. NFs', 'Ticket médio']
                 
                 # Exibir tabela formatada
-                st.dataframe(
-                    df_exibicao,
-                    use_container_width=True,
-                    hide_index=True
-                )
+                ui.tabela(df_exibicao, hide_index=True)
 with tab_ontem:
-    # 📅 RELATÓRIO DO DIA ANTERIOR POR MARCA
-    titulo_ontem = formatar_titulo_marcas("📅 Relatório do Dia Anterior por Marca", marcas_selecionadas, marcas_disponiveis)
-    st.header(titulo_ontem)
+    # RELATÓRIO DO DIA ANTERIOR POR MARCA
+    titulo_ontem = formatar_titulo_marcas("Relatório do Dia Anterior por Marca", marcas_selecionadas, marcas_disponiveis)
+    st.subheader(titulo_ontem)
 
     # Calcular data do dia anterior
     import datetime
@@ -641,21 +606,21 @@ with tab_ontem:
             col_info, col_total, col_valor = st.columns(3)
             
             with col_info:
-                st.info(f"📊 **Data:** {dia_anterior.strftime('%d/%m/%Y')} ({dia_anterior.strftime('%A')})")
+                st.info(f"**Data:** {dia_anterior.strftime('%d/%m/%Y')} ({dia_anterior.strftime('%A')})")
             
             with col_total:
                 total_itens_dia = faturado_dia_anterior['Quantidade'].sum()
                 total_valor_dia = faturado_dia_anterior['Vl Net Livro'].sum()
-                st.metric("📦 Total de Itens", formatar_valor_seguro(total_itens_dia, "number"))
+                st.metric("Total de Itens", formatar_valor_seguro(total_itens_dia, "number"))
                 
             with col_valor:
-                st.metric("💰 Valor Total", formatar_valor_seguro(total_valor_dia, "currency"))
+                st.metric("Valor Total", formatar_valor_seguro(total_valor_dia, "currency"))
             
             # Criar abas para diferentes análises
-            tab_resumo_marca, tab_canal_venda = st.tabs(["📋 Resumo por Marca", "🛒 Análise por Canal de Venda"])
+            tab_resumo_marca, tab_canal_venda = st.tabs(["Resumo por Marca", "Análise por Canal de Venda"])
             
             with tab_resumo_marca:
-                st.subheader("📋 Detalhamento por Marca")
+                st.subheader("Detalhamento por Marca")
                 
                 # Usar as funções do ETL para análise de receita
                 if 'Tipo Oper' in faturado_dia_anterior.columns:
@@ -667,18 +632,10 @@ with tab_ontem:
                         relatorio_formatado = relatorio_completo.copy()
                         
                         # Formatar valores
-                        relatorio_formatado['Receita Sim'] = relatorio_formatado['Receita Sim'].apply(
-                            lambda x: formatar_valor_seguro(x, "currency")
-                        )
-                        relatorio_formatado['Receita Não'] = relatorio_formatado['Receita Não'].apply(
-                            lambda x: formatar_valor_seguro(x, "currency")
-                        )
-                        relatorio_formatado['QTD. NFs'] = relatorio_formatado['QTD. NFs'].apply(
-                            lambda x: formatar_valor_seguro(x, "number")
-                        )
-                        relatorio_formatado['QTD. NFs (NÃO)'] = relatorio_formatado['QTD. NFs (NÃO)'].apply(
-                            lambda x: formatar_valor_seguro(x, "number")
-                        )
+
+
+
+
                         
                         # Adicionar linha de total usando as funções específicas do ETL
                         df_receita_sim = etl_faturamento.filtrar_receita_sim(faturado_dia_anterior)
@@ -692,34 +649,26 @@ with tab_ontem:
                         
                         linha_total = pd.DataFrame({
                             'Marca': ['TOTAL'],
-                            'Receita Sim': [formatar_valor_seguro(total_receita_sim, "currency")],
-                            'QTD. NFs': [formatar_valor_seguro(total_nfs_sim, "number")],
-                            'Receita Não': [formatar_valor_seguro(total_receita_nao, "currency")],
-                            'QTD. NFs (NÃO)': [formatar_valor_seguro(total_nfs_nao, "number")]
+                            'Receita Sim': [total_receita_sim],
+                            'QTD. NFs': [total_nfs_sim],
+                            'Receita Não': [total_receita_nao],
+                            'QTD. NFs (NÃO)': [total_nfs_nao]
                         })
                         
                         # Combinar dados com linha de total
                         relatorio_final = pd.concat([relatorio_formatado, linha_total], ignore_index=True)
                         
                         # Exibir tabela formatada
-                        st.dataframe(
-                            relatorio_final,
-                            use_container_width=True,
-                            hide_index=True
-                        )
+                        ui.tabela(relatorio_final, hide_index=True)
                     else:
-                        st.info("ℹ️ Nenhum dado de receita encontrado para o dia anterior")
+                        st.info("ℹ Nenhum dado de receita encontrado para o dia anterior")
                     
                 else:
                     # Fallback para estrutura original se não houver coluna Tipo Oper
-                    st.dataframe(
-                        relatorio_dia_anterior,
-                        use_container_width=True,
-                        hide_index=True
-                    )
+                    ui.tabela(relatorio_dia_anterior, hide_index=True)
             
             with tab_canal_venda:
-                st.subheader("🛒 Análise por Canal de Venda")
+                st.subheader("Análise por Canal de Venda")
                 
                 # Análise por canal de venda
                 if 'Canal Venda Cliente' in faturado_dia_anterior.columns:
@@ -739,31 +688,17 @@ with tab_ontem:
                     relatorio_canal_venda = relatorio_canal_venda.sort_values('Valor Total', ascending=False)
                     
                     # Formatar valores
-                    relatorio_canal_venda['Qtd Itens'] = relatorio_canal_venda['Qtd Itens'].apply(
-                        lambda x: formatar_valor_seguro(x, "number")
-                    )
-                    relatorio_canal_venda['Valor Total'] = relatorio_canal_venda['Valor Total'].apply(
-                        lambda x: formatar_valor_seguro(x, "currency")
-                    )
-                    relatorio_canal_venda['SKUs Únicos'] = relatorio_canal_venda['SKUs Únicos'].apply(
-                        lambda x: formatar_valor_seguro(x, "number")
-                    )
-                    relatorio_canal_venda['NFs Únicas'] = relatorio_canal_venda['NFs Únicas'].apply(
-                        lambda x: formatar_valor_seguro(x, "number")
-                    )
-                    relatorio_canal_venda['Marcas Únicas'] = relatorio_canal_venda['Marcas Únicas'].apply(
-                        lambda x: formatar_valor_seguro(x, "number")
-                    )
+
+
+
+
+
                     
                     # Exibir tabela de canal de venda
-                    st.dataframe(
-                        relatorio_canal_venda,
-                        use_container_width=True,
-                        hide_index=True
-                    )
+                    ui.tabela(relatorio_canal_venda, hide_index=True)
                     
                     # Análise detalhada por marca e canal de venda
-                    st.subheader("🔍 Detalhamento por Marca e Canal de Venda")
+                    st.subheader("Detalhamento por Marca e Canal de Venda")
                     
                     # Agrupar por marca e canal de venda
                     relatorio_marca_canal = faturado_dia_anterior.groupby(['Marca', 'Canal Venda Cliente']).agg({
@@ -780,28 +715,16 @@ with tab_ontem:
                     relatorio_marca_canal = relatorio_marca_canal.sort_values(['Marca', 'Valor Total'], ascending=[True, False])
                     
                     # Formatar valores
-                    relatorio_marca_canal['Qtd Itens'] = relatorio_marca_canal['Qtd Itens'].apply(
-                        lambda x: formatar_valor_seguro(x, "number")
-                    )
-                    relatorio_marca_canal['Valor Total'] = relatorio_marca_canal['Valor Total'].apply(
-                        lambda x: formatar_valor_seguro(x, "currency")
-                    )
-                    relatorio_marca_canal['SKUs Únicos'] = relatorio_marca_canal['SKUs Únicos'].apply(
-                        lambda x: formatar_valor_seguro(x, "number")
-                    )
-                    relatorio_marca_canal['NFs Únicas'] = relatorio_marca_canal['NFs Únicas'].apply(
-                        lambda x: formatar_valor_seguro(x, "number")
-                    )
+
+
+
+
                     
                     # Exibir tabela detalhada
-                    st.dataframe(
-                        relatorio_marca_canal,
-                        use_container_width=True,
-                        hide_index=True
-                    )
+                    ui.tabela(relatorio_marca_canal, hide_index=True)
                     
                     # Gráfico de barras por canal de venda
-                    st.subheader("📊 Gráfico por Canal de Venda")
+                    st.subheader("Gráfico por Canal de Venda")
                     
                     # Preparar dados para o gráfico (valores numéricos)
                     dados_grafico_canal = faturado_dia_anterior.groupby('Canal Venda Cliente').agg({
@@ -816,7 +739,7 @@ with tab_ontem:
                         dados_grafico_canal,
                         x='Canal Venda Cliente',
                         y='Vl Net Livro',
-                        title=f'💰 Faturamento por Canal de Venda - {dia_anterior.strftime("%d/%m/%Y")}',
+                        title=f'Faturamento por Canal de Venda - {dia_anterior.strftime("%d/%m/%Y")}',
                         labels={'Vl Net Livro': 'Valor Total (R$)', 'Canal Venda Cliente': 'Canal de Venda'},
                         color='Vl Net Livro',
                         color_continuous_scale='Blues'
@@ -826,7 +749,7 @@ with tab_ontem:
                         xaxis_title="Canal de Venda",
                         yaxis_title="Valor Total (R$)",
                         yaxis_tickprefix="R$ ",
-                        plot_bgcolor="#F9F9F9",
+                        plot_bgcolor="rgba(0,0,0,0)",
                         margin=dict(t=50, b=30),
                         xaxis=dict(tickangle=45)
                     )
@@ -834,32 +757,33 @@ with tab_ontem:
                     st.plotly_chart(fig_canal_venda, use_container_width=True)
                     
                 else:
-                    st.warning("⚠️ Coluna 'Canal Venda Cliente' não encontrada nos dados")
+                    st.warning("Coluna 'Canal Venda Cliente' não encontrada nos dados")
             
 
             
         else:
-            st.warning(f"⚠️ Nenhum item foi faturado em {dia_anterior.strftime('%d/%m/%Y')}")
+            st.warning(f"Nenhum item foi faturado em {dia_anterior.strftime('%d/%m/%Y')}")
             
             # Mostrar informações sobre o dia anterior mesmo sem dados
             col_info, col_sugestao = st.columns([1, 1])
             
             with col_info:
-                st.info(f"📅 **Data:** {dia_anterior.strftime('%d/%m/%Y')} ({dia_anterior.strftime('%A')})")
+                st.info(f"**Data:** {dia_anterior.strftime('%d/%m/%Y')} ({dia_anterior.strftime('%A')})")
             
             with col_sugestao:
-                st.info("💡 **Sugestão:** Verifique se há dados disponíveis para esta data ou se foi um dia sem movimento.")
+                st.info("**Sugestão:** Verifique se há dados disponíveis para esta data ou se foi um dia sem movimento.")
     else:
-        st.error("❌ Coluna 'Dt Emis NF' não encontrada nos dados")
+        st.error("Coluna 'Dt Emis NF' não encontrada nos dados")
 
 
 
 # Segundo grupo de abas - Gráficos
-tab_fat_diario, tab_fat_marca, tab_potencial = st.tabs(["📆 Faturamento Diário", "📊 Faturamento por Marca", "🎯 Potencial x Faturamento"])
+ui.secao("Evolução do faturamento", "Faturamento diário, por marca e atingimento do potencial de embarques.")
+tab_fat_diario, tab_fat_marca, tab_potencial = st.tabs(["Faturamento Diário", "Faturamento por Marca", "Potencial x Faturamento"])
 
 with tab_fat_diario:
-# 📈 Gráfico interativo com Plotly Express
-    titulo_grafico = formatar_titulo_marcas("📆 Faturamento Diário", marcas_selecionadas, marcas_disponiveis)
+# Gráfico interativo com Plotly Express
+    titulo_grafico = formatar_titulo_marcas("Faturamento Diário", marcas_selecionadas, marcas_disponiveis)
         
     fig_fat = px.line(
         faturamento_diario,
@@ -869,12 +793,12 @@ with tab_fat_diario:
         title=titulo_grafico,
         labels={"Dt Emis NF": "Data", "Vl Net Livro": "Faturamento (R$)"},
         hover_data={"Vl Net Livro": False, "vl_formatado": True},
-        text="vl_formatado",  # 🎯 Mostrar o valor no ponto
+        text="vl_formatado",  # Mostrar o valor no ponto
     )
 
-    # ✨ Personalização do layout
+    # Personalização do layout
     fig_fat.update_traces(
-        line=dict(color="blue"),
+        line=dict(color=ui.CORES["primaria"]),
         marker=dict(size=8),
         textposition="top center",  # Pode usar: 'top center', 'bottom center', 'middle right', etc.
         textfont=dict(size=10),
@@ -889,13 +813,13 @@ with tab_fat_diario:
         margin=dict(t=50, b=30),
     )
 
-    # 📊 Exibir o gráfico
+    # Exibir o gráfico
     st.plotly_chart(fig_fat, use_container_width=True, key="faturamento_geral")
     
 with tab_fat_marca:
-    # 📊 Gráfico de Barras com Plotly
-    # 🏷️ Faturamento por Marca - Gráfico Detalhado
-    titulo_marca_grafico = formatar_titulo_marcas("📊 Faturamento por Marca - Análise Detalhada", marcas_selecionadas, marcas_disponiveis)
+    # Gráfico de Barras com Plotly
+    # Faturamento por Marca - Gráfico Detalhado
+    titulo_marca_grafico = formatar_titulo_marcas("Faturamento por Marca - Análise Detalhada", marcas_selecionadas, marcas_disponiveis)
     st.subheader(titulo_marca_grafico)
     
     # Agrupar faturamento por marca e data
@@ -913,7 +837,7 @@ with tab_fat_marca:
         y="Vl Net Livro",
         color="Marca",
         markers=True,
-        title="📈 Faturamento por Marca ao Longo do Tempo",
+        title="Faturamento por Marca ao Longo do Tempo",
         labels={"Dt Emis NF": "Data", "Vl Net Livro": "Faturamento (R$)", "Marca": "Marca"},
         hover_data={"Vl Net Livro": False, "vl_formatado": True},
         color_discrete_map=cores_marca
@@ -947,8 +871,8 @@ with tab_fat_marca:
 from datetime import datetime
 
 with tab_potencial:
-    # 🎯 Gráfico de Potencial x Faturamento
-    titulo_potencial = formatar_titulo_marcas("🎯 Análise de Potencial x Faturamento", marcas_selecionadas, marcas_disponiveis)
+    # Gráfico de Potencial x Faturamento
+    titulo_potencial = formatar_titulo_marcas("Análise de Potencial x Faturamento", marcas_selecionadas, marcas_disponiveis)
     st.subheader(titulo_potencial)
     
     # Mapeamento entre marcas anonimizadas e nomes reais das unidades
@@ -1036,14 +960,14 @@ with tab_potencial:
                 name='Potencial Total',
                 x=comparacao_df['Marca'],
                 y=comparacao_df['Potencial'],
-                marker_color='#808080',
+                marker_color='#CBD5E1',
                 text=[formatar_valor_seguro(x, "currency") for x in comparacao_df['Potencial']],
                 textposition='outside'
             ))
             
             # Configurar layout
             fig_potencial.update_layout(
-                title='🎯 Comparação: Potencial vs Faturamento Bruto por Marca',
+                title='Comparação: Potencial vs Faturamento Bruto por Marca',
                 xaxis_title='Marca',
                 yaxis_title='Valor (R$)',
                 barmode='group',
@@ -1081,44 +1005,10 @@ with tab_potencial:
                             marca = row['Marca']
                             percentual = row['Percentual_Atingido']
                             
-                            # Definir cor baseada no percentual
-                            if percentual >= 100:
-                                cor_card = "#28a745"  # Verde - Meta atingida
-                                emoji = "🎯"
-                            elif percentual >= 80:
-                                cor_card = "#ffc107"  # Amarelo - Próximo da meta
-                                emoji = "📈"
-                            elif percentual >= 50:
-                                cor_card = "#fd7e14"  # Laranja - Metade da meta
-                                emoji = "⚠️"
-                            else:
-                                cor_card = "#dc3545"  # Vermelho - Abaixo da meta
-                                emoji = "🔴"
-                            
-                            # Criar card simplificado com HTML/CSS
-                            card_html = f"""
-                            <div style="
-                                background: linear-gradient(135deg, {cor_card}20 0%, {cor_card}40 100%);
-                                border: 2px solid {cor_card};
-                                border-radius: 12px;
-                                padding: 12px;
-                                margin: 6px 0;
-                                text-align: center;
-                                box-shadow: 0 3px 12px rgba(0,0,0,0.1);
-                            ">
-                                <h4 style="color: {cor_card}; margin: 0 0 8px 0; font-size: 1em;">
-                                    {emoji} {marca}
-                                </h4>
-                                <div style="font-size: 1.8em; font-weight: bold; color: {cor_card}; margin: 0;">
-                                    {percentual:.1f}%
-                                </div>
-                            </div>
-                            """
-                            
-                            st.markdown(card_html, unsafe_allow_html=True)
+                            st.markdown(ui.progresso_card_html(marca, percentual), unsafe_allow_html=True)
             
             # DataFrame detalhado como na imagem
-            st.subheader("📋 Potencial x Faturado - Receita Sim+Não")
+            st.subheader("Potencial x Faturado - Receita Sim+Não")
             
             # Preparar dados detalhados
             df_detalhado = pd.DataFrame()
@@ -1192,42 +1082,31 @@ with tab_potencial:
             
             # Formatar valores monetários
             colunas_monetarias = ['POTENCIAL', 'TICKET MÉDIO EMBARQUE', 'FATURADO PERÍODO', 'RECEITA NÃO', 'DIFERENÇA PREV. X FATURAD']
-            for col in colunas_monetarias:
-                df_detalhado[col] = df_detalhado[col].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if x != 0 else "R$ -")
+
             
             # Formatar percentual
-            df_detalhado['PERCENTUAL'] = df_detalhado['PERCENTUAL'].apply(lambda x: f"{x:.0f}%" if x > 0 else "0%")
+
             
             # Formatar quantidades
             colunas_quantidade = ['QTD. EMBARQUES DISPONÍVEIS', 'QTD. NFs', 'QTD. NFs (NÃO)']
-            for col in colunas_quantidade:
-                df_detalhado[col] = df_detalhado[col].apply(lambda x: f"{x:.0f}" if x > 0 else "0")
+
             
             # Exibir DataFrame com formatação
-            st.dataframe(
+            ui.tabela(
                 df_detalhado,
-                use_container_width=True,
+                moeda=colunas_monetarias,
+                inteiro=colunas_quantidade,
+                percentual=['PERCENTUAL'],
+                casas_percentual=0,
                 hide_index=True,
-                column_config={
-                    "UNIDADE DE NEGÓCIO": st.column_config.TextColumn("UNIDADE DE NEGÓCIO", width="medium"),
-                    "POTENCIAL": st.column_config.TextColumn("POTENCIAL", width="medium"),
-                    "QTD. EMBARQUES DISPONÍVEIS": st.column_config.TextColumn("QTD. EMBARQUES DISPONÍVEIS", width="medium"),
-                    "TICKET MÉDIO EMBARQUE": st.column_config.TextColumn("TICKET MÉDIO EMBARQUE", width="medium"),
-                    "FATURADO PERÍODO": st.column_config.TextColumn("FATURADO PERÍODO", width="medium"),
-                    "QTD. NFs": st.column_config.TextColumn("QTD. NFs", width="medium"),
-                    "RECEITA NÃO": st.column_config.TextColumn("RECEITA NÃO", width="medium"),
-                    "QTD. NFs (NÃO)": st.column_config.TextColumn("QTD. NFs (NÃO)", width="medium"),
-                    "DIFERENÇA PREV. X FATURAD": st.column_config.TextColumn("DIFERENÇA PREV. X FATURAD", width="medium"),
-                    "PERCENTUAL": st.column_config.TextColumn("PERCENTUAL", width="medium")
-                }
             )
             
         else:
-            st.warning("⚠️ Nenhum dado de potencial encontrado")
+            st.warning("Nenhum dado de potencial encontrado")
             
     except Exception as e:
-        st.error(f"❌ Erro ao carregar dados de potencial: {str(e)}")
-        st.info("💡 Verifique se o arquivo de embarques está disponível e acessível")
+        st.error(f"Erro ao carregar dados de potencial: {str(e)}")
+        st.info("Verifique se o arquivo de embarques está disponível e acessível")
 # Filtros para Marca e Canal Venda Cliente
 marcas_disponiveis = faturado['Marca'].dropna().unique()
 canais_disponiveis = faturado['Canal Venda Cliente'].dropna().unique()
@@ -1236,7 +1115,7 @@ canais_disponiveis = faturado['Canal Venda Cliente'].dropna().unique()
 # ANÁLISE DE FATURAMENTO MÊS A MÊS
 # ============================================================================
 
-st.subheader("📊 Faturamento Mês a Mês")
+ui.secao("Faturamento mês a mês", "Histórico completo, independente do filtro de período.")
 
 # Verificar se há dados e coluna de data (usar dados completos, não filtrados)
 if 'Dt Emis NF' in faturado_completo.columns and len(faturado_completo) > 0:
@@ -1249,7 +1128,7 @@ if 'Dt Emis NF' in faturado_completo.columns and len(faturado_completo) > 0:
     faturado_temporal['Mes_Ano'] = faturado_temporal['Dt Emis NF'].dt.to_period('M').astype(str)
     
     # Criar abas para análise geral e por unidade
-    tab_geral, tab_por_unidade = st.tabs(["📈 Faturamento Geral", "🏢 Faturamento por Unidade"])
+    tab_geral, tab_por_unidade = st.tabs(["Faturamento Geral", "Faturamento por Unidade"])
     
     with tab_geral:
         st.subheader("Faturamento Total por Mês")
@@ -1299,18 +1178,14 @@ if 'Dt Emis NF' in faturado_completo.columns and len(faturado_completo) > 0:
         st.plotly_chart(fig_mensal_geral, use_container_width=True, key="faturamento_mensal_geral")
         
         # Mostrar tabela com dados detalhados
-        st.subheader("📋 Detalhamento Mensal")
+        st.subheader("Detalhamento Mensal")
         
         # Formatar valores para exibição
         faturamento_mensal_formatado = faturamento_mensal.copy()
-        faturamento_mensal_formatado['Valor Total'] = faturamento_mensal_formatado['Valor Total'].apply(
-            lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        )
-        faturamento_mensal_formatado['Quantidade Total'] = faturamento_mensal_formatado['Quantidade Total'].apply(
-            lambda x: f"{x:,.0f}".replace(",", ".")
-        )
+
+
         
-        st.dataframe(faturamento_mensal_formatado, use_container_width=True, hide_index=True)
+        ui.tabela(faturamento_mensal_formatado, hide_index=True)
         
     with tab_por_unidade:
         st.subheader("Faturamento por Unidade e Mês")
@@ -1358,7 +1233,7 @@ if 'Dt Emis NF' in faturado_completo.columns and len(faturado_completo) > 0:
         st.plotly_chart(fig_mensal_marca_empilhado, use_container_width=True, key="faturamento_mensal_marca_empilhado")
         
         # Mostrar tabela pivot
-        st.subheader("📋 Tabela Detalhada por Unidade")
+        st.subheader("Tabela Detalhada por Unidade")
         
         # Criar tabela pivot
         tabela_pivot = faturamento_mensal_marca.pivot_table(
@@ -1372,24 +1247,21 @@ if 'Dt Emis NF' in faturado_completo.columns and len(faturado_completo) > 0:
         tabela_pivot['Total'] = tabela_pivot.sum(axis=1)
         
         # Formatar valores
-        tabela_pivot_formatada = tabela_pivot.applymap(
-            lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if x != 0 else "R$ 0,00"
-        )
-        
-        st.dataframe(tabela_pivot_formatada, use_container_width=True)
+        ui.tabela(tabela_pivot, moeda=list(tabela_pivot.columns))
 else:
-    st.warning("⚠️ Dados de data não disponíveis para análise mensal")
+    st.warning("Dados de data não disponíveis para análise mensal")
 
 # ============================================================================
 # ANÁLISE POR REGIÃO E ESTADO
 # ============================================================================
 
-# 🗺️ Análise por Região e Estado em Abas
+# Análise por Região e Estado em Abas
 
-tab_estado, tab_regiao = st.tabs(["🗺️ Por Estado", "📍 Por Região"])
+ui.secao("Distribuição geográfica", "Faturamento por estado e por região do Brasil.")
+tab_estado, tab_regiao = st.tabs(["Por Estado", "Por Região"])
 
 with tab_estado:
-    titulo_mapa = formatar_titulo_marcas("🗺️ Mapa de Distribuição de Faturamento por Estado", marcas_selecionadas, marcas_disponiveis)
+    titulo_mapa = formatar_titulo_marcas("Mapa de Distribuição de Faturamento por Estado", marcas_selecionadas, marcas_disponiveis)
     st.subheader(titulo_mapa)
 
     # Agrupar por estado - consolidando primeiro por NF para evitar duplicatas
@@ -1417,7 +1289,7 @@ with tab_estado:
         
         # Debug: Mostrar total para verificação
         total_faturamento_estados = estados_consolidados['Valor Total'].sum()
-        st.info(f"🔍 **Total de Faturamento por Estado:** {formatar_valor_seguro(total_faturamento_estados, 'currency')}")
+        st.info(f"**Total de Faturamento por Estado:** {formatar_valor_seguro(total_faturamento_estados, 'currency')}")
 
         def carregar_dados_geojson():
             """
@@ -1456,36 +1328,37 @@ with tab_estado:
                 }
             
             # Criar o mapa coroplético baseado no valor total de faturamento por estado
-            fig = go.Figure(go.Choroplethmapbox(
+            # Plotly >= 5.24 usa Choroplethmap (MapLibre); versões anteriores, Choroplethmapbox
+            usa_maplibre = hasattr(go, "Choroplethmap")
+            trace_mapa = go.Choroplethmap if usa_maplibre else go.Choroplethmapbox
+            prefixo_mapa = "map" if usa_maplibre else "mapbox"
+            fig = go.Figure(trace_mapa(
                 geojson=geojson_data,
                 locations=list(estados_map.keys()),
                 z=[estados_map[estado]['Valor Total'] for estado in estados_map.keys()],
-                colorscale='Blues',
-                colorbar_title="Faturamento Total (R$)",
+                colorscale=[[0, '#EFF6FF'], [0.5, '#60A5FA'], [1, '#1E3A8A']],
+                colorbar=dict(title=dict(text="Faturamento (R$)", font=dict(size=11)), thickness=12, outlinewidth=0),
                 hovertemplate="<b>%{location}</b><br>" +
                              "Valor Total: R$ %{z:,.2f}<br>" +
                              "Qtd NFs: %{customdata[0]:,.0f}<br>" +
                              "Qtd Total: %{customdata[1]:,.0f}<br>" +
                              "<extra></extra>",
                 customdata=[[estados_map[estado]['Qtd NFs'], estados_map[estado]['Qtd Total']] for estado in estados_map.keys()],
-                marker_opacity=0.8,
+                marker_opacity=0.9,
                 marker_line_width=1,
                 marker_line_color='white'
             ))
             
             # Configurar layout do mapa com fundo branco
             fig.update_layout(
-                mapbox_style="white-bg",
-                mapbox_zoom=3.2,
-                mapbox_center={"lat": -14.2350, "lon": -51.9253},
-                margin={"r": 50, "t": 50, "l": 50, "b": 50},
+                **{
+                    f"{prefixo_mapa}_style": "white-bg",
+                    f"{prefixo_mapa}_zoom": 3.2,
+                    f"{prefixo_mapa}_center": {"lat": -14.2350, "lon": -51.9253},
+                },
+                margin={"r": 8, "t": 48, "l": 8, "b": 8},
                 height=600,
-                title={
-                    'text': "Distribuição de Faturamento por Estado",
-                    'x': 0.5,
-                    'xanchor': 'center',
-                    'font': {'size': 20}
-                }
+                title={'text': "Distribuição de faturamento por estado"},
             )
             
             return fig
@@ -1502,37 +1375,27 @@ with tab_estado:
             
             with col_tabela:
                 # Mostrar tabela de resumo por estado
-                st.subheader("📋 Resumo por Estado")
+                st.subheader("Resumo por Estado")
                 
-                # Formatar valores para exibição
-                estados_consolidados['Valor Total Formatado'] = estados_consolidados['Valor Total'].apply(
-                    lambda x: formatar_valor_seguro(x, "currency")
-                )
-                estados_consolidados['Qtd NFs Formatado'] = estados_consolidados['Qtd NFs'].apply(
-                    lambda x: formatar_valor_seguro(x, "number")
-                )
-                estados_consolidados['Qtd Total Formatado'] = estados_consolidados['Qtd Total'].apply(
-                    lambda x: formatar_valor_seguro(x, "number")
-                )
                 
                 # Calcular percentual do total
                 total_faturamento_estados = estados_consolidados['Valor Total'].sum()
                 estados_consolidados['Percentual'] = (estados_consolidados['Valor Total'] / total_faturamento_estados * 100).round(2)
                 
                 # Preparar dados para exibição
-                df_exibicao_estados = estados_consolidados[['Estado', 'Valor Total Formatado', 'Qtd NFs Formatado', 'Qtd Total Formatado', 'Percentual']].copy()
+                df_exibicao_estados = estados_consolidados[['Estado', 'Valor Total', 'Qtd NFs', 'Qtd Total', 'Percentual']].copy()
                 df_exibicao_estados.columns = ['Estado', 'Valor Total', 'Qtd NFs', 'Qtd Total', '% do Total']
                 
-                st.dataframe(df_exibicao_estados, use_container_width=True, hide_index=True)
+                ui.tabela(df_exibicao_estados, hide_index=True)
         else:
-            st.warning("⚠️ Não foi possível carregar o mapa. Verifique se o arquivo br_states.json está disponível.")
+            st.warning("Não foi possível carregar o mapa. Verifique se o arquivo br_states.json está disponível.")
     else:
-        st.warning("⚠️ Coluna 'Estado' não encontrada nos dados para criar o mapa.")
+        st.warning("Coluna 'Estado' não encontrada nos dados para criar o mapa.")
 
 
 
 with tab_regiao:
-    titulo_regiao = formatar_titulo_marcas("🗺️ Análise de Faturamento por Região", marcas_selecionadas, marcas_disponiveis)
+    titulo_regiao = formatar_titulo_marcas("Análise de Faturamento por Região", marcas_selecionadas, marcas_disponiveis)
     st.subheader(titulo_regiao)
 
     # Calcular faturamento por região - consolidando primeiro por NF para evitar duplicatas
@@ -1554,15 +1417,8 @@ with tab_regiao:
     df_regiao['Percentual'] = (df_regiao['Faturamento'] / total_faturamento * 100).round(2)
 
     # Debug: Mostrar total para verificação
-    st.info(f"🔍 **Total de Faturamento por Região:** {formatar_valor_seguro(total_faturamento, 'currency')}")
+    st.info(f"**Total de Faturamento por Região:** {formatar_valor_seguro(total_faturamento, 'currency')}")
 
-    # Formatar valores
-    df_regiao['Faturamento_Formatado'] = df_regiao['Faturamento'].apply(
-        lambda x: formatar_valor_seguro(x, "currency")
-    )
-    df_regiao['Registros_Formatado'] = df_regiao['Registros'].apply(
-        lambda x: formatar_valor_seguro(x, "number")
-    )
 
     # Layout em duas colunas
     col_grafico, col_tabela = st.columns(2)
@@ -1573,10 +1429,10 @@ with tab_regiao:
             df_regiao,
             x='Região',
             y='Faturamento',
-            title='📊 Faturamento por Região',
+            title='Faturamento por Região',
             labels={'Faturamento': 'Faturamento (R$)', 'Região': 'Região'},
             color='Região',
-            color_discrete_sequence=px.colors.qualitative.Set3
+            color_discrete_sequence=ui.SEQUENCIA_CATEGORICA
         )
         
         fig_regiao.update_layout(
@@ -1584,7 +1440,7 @@ with tab_regiao:
             xaxis_title="Região",
             yaxis_title="Faturamento (R$)",
             showlegend=False,
-            plot_bgcolor="#FFFFFF",
+            plot_bgcolor="rgba(0,0,0,0)",
             margin=dict(t=50, b=30),
         )
         
@@ -1592,13 +1448,13 @@ with tab_regiao:
 
     with col_tabela:
         # Tabela de resumo por região
-        st.subheader("📋 Resumo por Região")
+        st.subheader("Resumo por Região")
         
         # Preparar dados para exibição
-        df_exibicao = df_regiao[['Região', 'Faturamento_Formatado', 'Registros_Formatado', 'Percentual']].copy()
+        df_exibicao = df_regiao[['Região', 'Faturamento', 'Registros', 'Percentual']].copy()
         df_exibicao.columns = ['Região', 'Faturamento', 'Qtd Registros', '% do Total']
         
-        st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
+        ui.tabela(df_exibicao, hide_index=True)
 
 
 
@@ -1616,7 +1472,7 @@ faturado_filtrado = etl_faturamento.filtrar_receita_sim(faturado_filtrado)
 
 # Debug: verificar se há dados
 if len(faturado_filtrado) == 0:
-    st.warning(f"⚠️ Nenhum dado encontrado após filtros para cálculo de lead time (Receita Sim). Verifique os filtros de mês/marca selecionados.")
+    st.warning(f"Nenhum dado encontrado após filtros para cálculo de lead time (Receita Sim). Verifique os filtros de mês/marca selecionados.")
     faturado_filtrado_lead = pd.DataFrame()
 else:
     faturado_filtrado_lead = etl_faturamento.adicionar_lead_time(faturado_filtrado)
@@ -1624,7 +1480,7 @@ else:
 # DataFrame removido - apenas gráficos de lead time e NFs acumuladas serão exibidos
 
 # Seção de Lead Time com Abas
-st.subheader("⏱️ Análise de Lead Time")
+ui.secao("Lead time", "Dias úteis entre embarque e emissão da NF (Sorocaba, São Paulo e Florianópolis, receita Sim).")
 
 # Preparar dados de lead time antes das tabs
 if len(faturado_filtrado_lead) == 0:
@@ -1641,10 +1497,10 @@ else:
 
 # Criar abas para organizar os gráficos de lead time
 tab_lead_time_1, tab_lead_time_2, tab_lead_time_3, tab_lead_time_4 = st.tabs([
-    "📊 Lead Time Médio por Marca",
-    "📈 Quantidade por D+ e Marca", 
-    "📊 Percentual por Marca em cada D+",
-    "📅 Lead Time Diário"
+    "Lead Time Médio por Marca",
+    "Quantidade por D+ e Marca", 
+    "Percentual por Marca em cada D+",
+    "Lead Time Diário"
 ])
 
 with tab_lead_time_1:
@@ -1652,7 +1508,7 @@ with tab_lead_time_1:
     
     # Verificar se há dados para processar
     if not tem_dados_lead_time:
-        st.info("⏱️ Lead Time Médio não disponível para o filtro atual. Nenhum dado de faturamento (Receita Sim) encontrado para as unidades principais.")
+        st.info("Lead Time Médio não disponível para o filtro atual. Nenhum dado de faturamento (Receita Sim) encontrado para as unidades principais.")
     else:
         
         # Calcular lead time médio por unidade (usando apenas NFs únicas)
@@ -1689,15 +1545,15 @@ with tab_lead_time_1:
             
             st.plotly_chart(fig, use_container_width=True, key="lead_time_medio_marca")
         else:
-            st.info("⏱️ Lead Time Médio não disponível para o filtro atual. Após filtrar pelas unidades principais, nenhum dado foi encontrado.")
+            st.info("Lead Time Médio não disponível para o filtro atual. Após filtrar pelas unidades principais, nenhum dado foi encontrado.")
 
 
 with tab_lead_time_2:
     # Gráfico de Quantidade de NFs por D+ e Marca
-    st.subheader("📊 Quantidade de Notas Fiscais por D+ e Marca")
+    st.subheader("Quantidade de Notas Fiscais por D+ e Marca")
     
     if not tem_dados_lead_time:
-        st.info("⏱️ Nenhum dado disponível para o filtro atual.")
+        st.info("Nenhum dado disponível para o filtro atual.")
     else:
         # Calcular distribuição por D+ e Unidade (usando apenas NFs únicas)
         distribuicao_d_mais_marca = (
@@ -1741,7 +1597,7 @@ with tab_lead_time_2:
             st.plotly_chart(fig_d_mais_marca, use_container_width=True, key="quantidade_d_mais_marca")
             
             # Mostrar tabela com os dados
-            st.subheader("📋 Distribuição Detalhada por D+ e Marca")
+            st.subheader("Distribuição Detalhada por D+ e Marca")
             
             # Criar tabela pivot para melhor visualização
             tabela_d_mais_marca = distribuicao_d_mais_marca.pivot_table(
@@ -1755,17 +1611,17 @@ with tab_lead_time_2:
             tabela_d_mais_marca['Total'] = tabela_d_mais_marca.sum(axis=1)
             tabela_d_mais_marca.loc['Total'] = tabela_d_mais_marca.sum(axis=0)
             
-            st.dataframe(tabela_d_mais_marca, use_container_width=True)
+            ui.tabela(tabela_d_mais_marca, inteiro=list(tabela_d_mais_marca.columns))
             
         else:
-            st.info("📅 Nenhum dado disponível para distribuição por D+ e Marca.")
+            st.info("Nenhum dado disponível para distribuição por D+ e Marca.")
 
 with tab_lead_time_3:
     # Gráfico de Percentual por Marca em cada D+
-    st.subheader("📊 Percentual por Marca em cada D+")
+    st.subheader("Percentual por Marca em cada D+")
     
     if not tem_dados_lead_time:
-        st.info("⏱️ Nenhum dado disponível para o filtro atual.")
+        st.info("Nenhum dado disponível para o filtro atual.")
     else:
         # Calcular distribuição por D+ e Unidade (usando apenas NFs únicas)
         distribuicao_d_mais_marca = (
@@ -1832,17 +1688,17 @@ with tab_lead_time_3:
                 st.plotly_chart(fig_torta, use_container_width=True, key="percentual_torta_marca")
             
             with col_tabela:
-                st.dataframe(tabela_percentual, use_container_width=True)
+                ui.tabela(tabela_percentual, percentual=list(tabela_percentual.columns))
             
         else:
-            st.info("📅 Nenhum dado disponível para percentual por D+ e Marca.")
+            st.info("Nenhum dado disponível para percentual por D+ e Marca.")
 
 with tab_lead_time_4:
     # Gráfico de Lead Time Diário
-    st.subheader("📊 Lead Time Diário")
+    st.subheader("Lead Time Diário")
     
     if not tem_dados_lead_time:
-        st.info("⏱️ Nenhum dado disponível para o filtro atual.")
+        st.info("Nenhum dado disponível para o filtro atual.")
     else:
         # Filtrar apenas outubro de 2025 e excluir finais de semana (usando apenas NFs únicas)
         faturado_outubro = faturado_filtrado_lead_unidades_principais_unicas[
@@ -1898,7 +1754,7 @@ with tab_lead_time_4:
             st.plotly_chart(fig_diario, use_container_width=True, key="lead_time_diario_outubro")
             
             # Mostrar tabela com os dados
-            st.subheader("📋 Dados Detalhados - Lead Time Diário")
+            st.subheader("Dados Detalhados - Lead Time Diário")
             tabela_diaria = lead_time_diario_outubro.pivot_table(
                 index='Dia',
                 columns='Marca',
@@ -1906,13 +1762,13 @@ with tab_lead_time_4:
                 aggfunc='mean'
             ).round(2)
             
-            st.dataframe(tabela_diaria, use_container_width=True)
+            ui.tabela(tabela_diaria, decimal=list(tabela_diaria.columns))
 
 # ============================================================================
 # SEÇÃO DE DEVOLUÇÃO
 # ============================================================================
 
-st.subheader("📦 Análise de Devoluções")
+ui.secao("Devoluções", "Valores devolvidos no período, por marca e por item.")
 
 # Carregar dados de devolução com cache
 @st.cache_data(ttl=300)
@@ -1944,27 +1800,27 @@ if len(df_devolucao) > 0:
     
     with col_dev1:
         st.metric(
-            "💰 Total Devoluções", 
+            "Total Devoluções", 
             f"R$ {metricas_devolucao['total_devolucao']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
     
     with col_dev2:
         st.metric(
-            "📦 Quantidade Devolvida", 
+            "Quantidade Devolvida", 
             f"{metricas_devolucao['qtd_devolucao']:,.0f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
     
     with col_dev3:
         st.metric(
-            "📊 Valor Médio", 
+            "Valor Médio", 
             f"R$ {metricas_devolucao['media_devolucao']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
 else:
-    st.warning("⚠️ Nenhuma devolução encontrada no período selecionado")
+    st.warning("Nenhuma devolução encontrada no período selecionado")
 
 # Cards de devolução por marca
 if len(df_devolucao) > 0 and len(metricas_devolucao['devolucao_por_marca']) > 0:
-    st.subheader("🏷️ Valor Devolvido por Marca")
+    st.subheader("Valor Devolvido por Marca")
     
     # Obter cores para devolução
     cores_devolucao = etl_faturamento.obter_cores_devolucao()
@@ -1980,25 +1836,23 @@ if len(df_devolucao) > 0 and len(metricas_devolucao['devolucao_por_marca']) > 0:
         percentual = (valor / total_geral) * 100
         
         # Determinar cor baseada na marca
-        cor_marca = cores_devolucao.get(marca, "#dc3545")
-        
-        # Formatar valor
-        valor_formatado = f"R$ {valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        cor_marca = cores_devolucao.get(marca, ui.CORES["negativo"])
         
         # Escolher coluna baseada no índice
-        col_idx = i % 4
-        with col_dev_cards[col_idx]:
-            st.markdown(f"""
-            <div class="card-devolucao" style="background: linear-gradient(135deg, {cor_marca} 0%, {cor_marca}CC 100%); border-left: 4px solid {cor_marca};">
-                <div class="card-title-devolucao">{marca}</div>
-                <div class="card-value-devolucao">{valor_formatado}</div>
-                <div class="card-subtitle-devolucao">{percentual:.1f}% do total</div>
-            </div>
-            """, unsafe_allow_html=True)
+        with col_dev_cards[i % 4]:
+            st.markdown(
+                ui.kpi_card_html(
+                    rotulo=marca,
+                    valor=formatar_valor_seguro(valor, "currency"),
+                    cor=cor_marca,
+                    sub=f"{percentual:.1f}".replace(".", ",") + "% do total devolvido",
+                ),
+                unsafe_allow_html=True,
+            )
 
 # Criar abas para diferentes visualizações de devolução
 if len(df_devolucao) > 0:
-    tab_dev1, tab_dev2, tab_dev3, tab_dev4 = st.tabs(["📊 Devoluções por Marca", "📈 Evolução das Devoluções", "📋 Dados Detalhados", "🔝 Top Itens com Maior Índice de Devolução"])
+    tab_dev1, tab_dev2, tab_dev3, tab_dev4 = st.tabs(["Devoluções por Marca", "Evolução das Devoluções", "Dados Detalhados", "Top Itens com Maior Índice de Devolução"])
     
     with tab_dev1:
         # Gráfico de torta - Devoluções por marca
@@ -2007,7 +1861,7 @@ if len(df_devolucao) > 0:
                 metricas_devolucao['devolucao_por_marca'].reset_index(),
                 values='Vl Net Livro',
                 names='Marca',
-                title="📦 Devoluções por Marca",
+                title="Devoluções por Marca",
                 color_discrete_map=cores_devolucao
             )
             
@@ -2032,9 +1886,6 @@ if len(df_devolucao) > 0:
             # Preparar dados da tabela
             resumo_devolucao = metricas_devolucao['devolucao_por_marca'].reset_index()
             resumo_devolucao['Percentual'] = (resumo_devolucao['Vl Net Livro'] / resumo_devolucao['Vl Net Livro'].sum() * 100).round(1)
-            resumo_devolucao['Valor Formatado'] = resumo_devolucao['Vl Net Livro'].apply(
-                lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            )
             
             resumo_devolucao = resumo_devolucao[['Marca', 'Vl Net Livro', 'Percentual']]
             resumo_devolucao.columns = ['Marca', 'Valor (R$)', '% do Total']
@@ -2046,16 +1897,8 @@ if len(df_devolucao) > 0:
                 st.plotly_chart(fig_torta_devolucao, use_container_width=True, key="torta_devolucao")
             
             with col2:
-                st.subheader("📋 Resumo de Devoluções por Marca")
-                st.dataframe(
-                    resumo_devolucao,
-                    column_config={
-                        "Valor (R$)": st.column_config.TextColumn("Valor (R$)", width="medium"),
-                        "% do Total": st.column_config.NumberColumn("% do Total", format="%.1f%%")
-                    },
-                    hide_index=True,
-                    use_container_width=True
-                )
+                st.subheader("Resumo de Devoluções por Marca")
+                ui.tabela(resumo_devolucao, hide_index=True)
     
     with tab_dev2:
         # Evolução das Devoluções ao Longo do Tempo
@@ -2074,7 +1917,7 @@ if len(df_devolucao) > 0:
                     x="Dt Emis NF",
                     y="Vl Net Livro",
                     markers=True,
-                    title="📈 Evolução das Devoluções Diárias",
+                    title="Evolução das Devoluções Diárias",
                     labels={"Dt Emis NF": "Data", "Vl Net Livro": "Valor Devolvido (R$)"},
                     hover_data={"Vl Net Livro": False, "vl_formatado": True},
                     text="vl_formatado",
@@ -2082,7 +1925,7 @@ if len(df_devolucao) > 0:
                 
                 # Personalização do layout
                 fig_devolucao_linha.update_traces(
-                    line=dict(color="red"),
+                    line=dict(color=ui.CORES["negativo"]),
                     marker=dict(size=8),
                     textposition="top center",
                     textfont=dict(size=10),
@@ -2094,14 +1937,14 @@ if len(df_devolucao) > 0:
                     hoverlabel=dict(bgcolor="white", font_size=13, font_family="Arial"),
                     xaxis=dict(tickangle=0),
                     yaxis_tickprefix="R$ ",
-                    plot_bgcolor="#F9F9F9",
+                    plot_bgcolor="rgba(0,0,0,0)",
                     margin=dict(t=50, b=30),
                 )
                 
                 st.plotly_chart(fig_devolucao_linha, use_container_width=True, key="devolucao_linha")
                 
                 # Gráfico de linha por marca
-                st.subheader("📈 Devoluções por Marca ao Longo do Tempo")
+                st.subheader("Devoluções por Marca ao Longo do Tempo")
                 devolucao_marca_data = df_devolucao.groupby(['Marca', 'Dt Emis NF'])['Vl Net Livro'].sum().reset_index()
                 
                 # Formatar valores para o gráfico
@@ -2116,7 +1959,7 @@ if len(df_devolucao) > 0:
                     y="Vl Net Livro",
                     color="Marca",
                     markers=True,
-                    title="📈 Devoluções por Marca ao Longo do Tempo",
+                    title="Devoluções por Marca ao Longo do Tempo",
                     labels={"Dt Emis NF": "Data", "Vl Net Livro": "Valor Devolvido (R$)", "Marca": "Marca"},
                     hover_data={"Vl Net Livro": False, "vl_formatado": True},
                     color_discrete_map=cores_devolucao
@@ -2134,7 +1977,7 @@ if len(df_devolucao) > 0:
                     hoverlabel=dict(bgcolor="white", font_size=13, font_family="Arial"),
                     xaxis=dict(tickangle=0),
                     yaxis_tickprefix="R$ ",
-                    plot_bgcolor="#F9F9F9",
+                    plot_bgcolor="rgba(0,0,0,0)",
                     margin=dict(t=50, b=30),
                     legend=dict(
                         orientation="h",
@@ -2147,13 +1990,13 @@ if len(df_devolucao) > 0:
                 
                 st.plotly_chart(fig_devolucao_marca, use_container_width=True, key="devolucao_por_marca")
             else:
-                st.info("📈 Nenhuma devolução encontrada para o período selecionado")
+                st.info("Nenhuma devolução encontrada para o período selecionado")
         else:
-            st.warning("⚠️ Coluna de data não encontrada para análise temporal")
+            st.warning("Coluna de data não encontrada para análise temporal")
     
     with tab_dev3:
         # Exibir DataFrame de Devoluções
-        st.subheader("📋 Dados Detalhados de Devoluções")
+        st.subheader("Dados Detalhados de Devoluções")
         
         # Formatar a coluna de data para exibição
         if 'Dt Emis NF' in df_devolucao.columns:
@@ -2162,11 +2005,11 @@ if len(df_devolucao) > 0:
         else:
             df_devolucao_display = df_devolucao.copy()
         
-        st.dataframe(df_devolucao_display, use_container_width=True)
+        ui.tabela(df_devolucao_display, hide_index=True)
     
     with tab_dev4:
         # Top itens com maior índice de devolução por marca
-        st.subheader("🔝 Top Itens com Maior Índice de Devolução por Marca")
+        st.subheader("Top Itens com Maior Índice de Devolução por Marca")
         
         # Calcular índice de devolução por item (se temos dados de faturamento para comparação)
         if 'faturado' in locals() and len(faturado) > 0:
@@ -2182,11 +2025,11 @@ if len(df_devolucao) > 0:
                 
                 if len(marcas_validas) > 0:
                     # Criar subabas para cada marca
-                    tabs_marcas = st.tabs([f"🏷️ {marca}" for marca in sorted(marcas_validas)])
+                    tabs_marcas = st.tabs([f"{marca}" for marca in sorted(marcas_validas)])
                     
                     for i, marca in enumerate(sorted(marcas_validas)):
                         with tabs_marcas[i]:
-                            st.subheader(f"📊 Análise de Devolução - {marca}")
+                            st.subheader(f"Análise de Devolução - {marca}")
                             
                             # Filtrar dados por marca
                             faturado_marca = faturado[faturado['Marca'] == marca]
@@ -2243,7 +2086,7 @@ if len(df_devolucao) > 0:
                                                     x='Indice_Devolucao_Valor',
                                                     y='Desc Item',
                                                     orientation='h',
-                                                    title=f"🔝 Top {len(top_grafico)} Itens - {marca}",
+                                                    title=f"Top {len(top_grafico)} Itens - {marca}",
                                                     labels={'Indice_Devolucao_Valor': 'Índice de Devolução (%)', 'Desc Item': 'Item'},
                                                     color='Indice_Devolucao_Valor',
                                                     color_continuous_scale='Reds'
@@ -2256,17 +2099,13 @@ if len(df_devolucao) > 0:
                                                 
                                                 st.plotly_chart(fig_top_devolucao, use_container_width=True)
                                             else:
-                                                st.info(f"📊 Não há dados suficientes para gerar gráfico para {marca}")
+                                                st.info(f"Não há dados suficientes para gerar gráfico para {marca}")
                                         
                                         with col2:
                                             # Preparar dados para exibição
                                             top_devolucao_display = top_devolucao.copy()
-                                            top_devolucao_display['Valor_Devolvido'] = top_devolucao_display['Vl Net Livro_x'].apply(
-                                                lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                                            )
-                                            top_devolucao_display['Valor_Faturado'] = top_devolucao_display['Vl Net Livro_y'].apply(
-                                                lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                                            )
+                                            top_devolucao_display['Valor_Devolvido'] = top_devolucao_display['Vl Net Livro_x']
+                                            top_devolucao_display['Valor_Faturado'] = top_devolucao_display['Vl Net Livro_y']
                                             
                                             # Selecionar colunas para exibição
                                             colunas_exibir = [
@@ -2281,137 +2120,63 @@ if len(df_devolucao) > 0:
                                             ]
                                             
                                             # Exibir tabela
-                                            st.dataframe(
+                                            ui.tabela(
                                                 top_devolucao_display,
-                                                column_config={
-                                                    "Índice Dev. (%)": st.column_config.NumberColumn("Índice Dev. (%)", format="%.2f%%"),
-                                                    "Índice Dev. Qtd (%)": st.column_config.NumberColumn("Índice Dev. Qtd (%)", format="%.2f%%"),
-                                                    "Qtd Devolvida": st.column_config.NumberColumn("Qtd Devolvida", format="%d"),
-                                                    "Qtd Faturada": st.column_config.NumberColumn("Qtd Faturada", format="%d")
-                                                },
+                                                moeda=['Valor Devolvido', 'Valor Faturado'],
+                                                percentual=['Índice Dev. (%)', 'Índice Dev. Qtd (%)'],
+                                                inteiro=['Qtd Devolvida', 'Qtd Faturada'],
+                                                casas_percentual=2,
                                                 hide_index=True,
-                                                use_container_width=True
                                             )
                                         
                                         # Métricas resumidas da marca
-                                        st.subheader(f"📈 Resumo - {marca}")
+                                        st.subheader(f"Resumo - {marca}")
                                         
                                         col_met1, col_met2, col_met3, col_met4 = st.columns(4)
                                         
                                         with col_met1:
                                             total_devolvido = top_devolucao['Vl Net Livro_x'].sum()
                                             st.metric(
-                                                "💰 Total Devolvido", 
+                                                "Total Devolvido", 
                                                 f"R$ {total_devolvido:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                                             )
                                         
                                         with col_met2:
                                             total_faturado = top_devolucao['Vl Net Livro_y'].sum()
                                             st.metric(
-                                                "💵 Total Faturado", 
+                                                "Total Faturado", 
                                                 f"R$ {total_faturado:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
                                             )
                                         
                                         with col_met3:
                                             indice_medio = top_devolucao['Indice_Devolucao_Valor'].mean()
                                             st.metric(
-                                                "📊 Índice Médio", 
+                                                "Índice Médio", 
                                                 f"{indice_medio:.2f}%"
                                             )
                                         
                                         with col_met4:
                                             qtd_itens = len(top_devolucao)
                                             st.metric(
-                                                "📦 Itens com Devolução", 
+                                                "Itens com Devolução", 
                                                 f"{qtd_itens}"
                                             )
                                     
                                     else:
-                                        st.info(f"📊 Nenhum item com índice de devolução significativo encontrado para {marca}")
+                                        st.info(f"Nenhum item com índice de devolução significativo encontrado para {marca}")
                                 else:
-                                    st.info(f"📊 Nenhum item comum entre faturamento e devolução encontrado para {marca}")
+                                    st.info(f"Nenhum item comum entre faturamento e devolução encontrado para {marca}")
                             else:
-                                st.warning(f"⚠️ Dados insuficientes para análise de {marca}")
+                                st.warning(f"Dados insuficientes para análise de {marca}")
                 else:
-                    st.warning("⚠️ Nenhuma marca com dados de devolução e faturamento encontrada")
+                    st.warning("Nenhuma marca com dados de devolução e faturamento encontrada")
             else:
-                st.warning("⚠️ Colunas necessárias não encontradas nos dados. Verifique se os dados contêm as colunas: Item, Desc Item, Vl Net Livro, Quantidade, Marca")
+                st.warning("Colunas necessárias não encontradas nos dados. Verifique se os dados contêm as colunas: Item, Desc Item, Vl Net Livro, Quantidade, Marca")
 
-# CSS específico para cards de devolução
-st.markdown("""
-<style>
-/* CSS específico para cards de devolução */
-.card-devolucao {
-    background: linear-gradient(135deg, var(--card-color) 0%, var(--card-color-light) 100%);
-    border-radius: 12px;
-    padding: 20px;
-    margin: 10px 0;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-    border-left: 4px solid var(--card-color);
-    transition: all 0.3s ease;
-    position: relative;
-    overflow: hidden;
-}
 
-.card-devolucao:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 30px rgba(0,0,0,0.2);
-}
-
-.card-devolucao::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(255,255,255,0.1);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.card-devolucao:hover::before {
-    opacity: 1;
-}
-
-.card-title-devolucao {
-    color: white;
-    font-size: 16px;
-    font-weight: 700;
-    margin-bottom: 12px;
-    text-align: center;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-    letter-spacing: 0.5px;
-}
-
-.card-value-devolucao {
-    color: white;
-    font-size: 22px;
-    font-weight: 800;
-    text-align: center;
-    margin-bottom: 8px;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.4);
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
-
-.card-subtitle-devolucao {
-    color: rgba(255,255,255,0.9);
-    font-size: 13px;
-    text-align: center;
-    font-weight: 500;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-    background: rgba(0,0,0,0.1);
-    padding: 4px 8px;
-    border-radius: 6px;
-    display: inline-block;
-    width: 100%;
-    box-sizing: border-box;
-}
-</style>
-""", unsafe_allow_html=True)
 
 # Gráfico de NFs Acumuladas
-st.subheader("📈 Notas Fiscais Acumuladas no Mês")
+ui.secao("Notas fiscais acumuladas no mês")
 
 # Calcular NFs acumuladas usando a função do ETL
 # Usar faturado_filtrado se existir, senão usar faturado com filtro de receita sim
@@ -2444,7 +2209,7 @@ if not nfs_acumuladas_geral.empty:
         fig_nfs_geral.update_traces(
             fill='tonexty',
             fillcolor='rgba(0, 100, 200, 0.3)',
-            line=dict(color='rgb(0, 100, 200)', width=2)
+            line=dict(color=ui.CORES['primaria'], width=2)
         )
         
         st.plotly_chart(fig_nfs_geral, use_container_width=True, key="nfs_acumuladas_geral")
@@ -2473,21 +2238,18 @@ if not nfs_acumuladas_geral.empty:
             
             st.plotly_chart(fig_nfs_marca, use_container_width=True, key="nfs_acumuladas_marca")
         else:
-            st.info("📅 Nenhum dado disponível para NFs acumuladas por marca.")
+            st.info("Nenhum dado disponível para NFs acumuladas por marca.")
     
-    with st.expander("📋 Detalhes das NFs Acumuladas", expanded=False):
+    with st.expander("Detalhes das NFs Acumuladas", expanded=False):
         # Mostrar tabela com os dados acumulados
-        # st.subheader("📋 Detalhes das NFs Acumuladas")  # Substituído pelo título do expander
+        # st.subheader("Detalhes das NFs Acumuladas")  # Substituído pelo título do expander
         
         # Criar tabela combinada
         tabela_combinada = nfs_acumuladas_geral[['Data', 'NFs_Dia', 'NFs_Acumuladas_Geral']].copy()
         tabela_combinada.columns = ['Data', 'NFs do Dia', 'NFs Acumuladas']
         
         # Formatar valores
-        tabela_combinada['NFs do Dia'] = tabela_combinada['NFs do Dia'].apply(lambda x: formatar_valor_seguro(x, 'number'))
-        tabela_combinada['NFs Acumuladas'] = tabela_combinada['NFs Acumuladas'].apply(lambda x: formatar_valor_seguro(x, 'number'))
-        
-        st.dataframe(tabela_combinada, use_container_width=True, hide_index=True)
+        ui.tabela(tabela_combinada, inteiro=['NFs do Dia', 'NFs Acumuladas'], hide_index=True)
 
 # ============================================================================
 # CURVA ABC DE FATURAMENTO POR ITEM POR MARCA
@@ -2498,9 +2260,10 @@ if not nfs_acumuladas_geral.empty:
 # Ajuste: Corrige a chamada de formatar_titulo_marcas e melhora a estrutura das abas
 
 # Corrige a chamada de formatar_titulo_marcas (removendo vírgula extra e argumentos corretos)
+ui.secao("Mix de produtos", "Curva ABC e itens mais faturados por marca.")
 aba_curva_abc, aba_top_itens = st.tabs([
-    formatar_titulo_marcas("📈 Curva ABC de Faturamento por Item por Marca", marcas_selecionadas, marcas_disponiveis),
-    formatar_titulo_marcas("📊 Top Itens Faturados", marcas_selecionadas, marcas_disponiveis)
+    formatar_titulo_marcas("Curva ABC de Faturamento por Item por Marca", marcas_selecionadas, marcas_disponiveis),
+    formatar_titulo_marcas("Top Itens Faturados", marcas_selecionadas, marcas_disponiveis)
 ])
 
 with aba_curva_abc:
@@ -2510,7 +2273,7 @@ with aba_curva_abc:
     marcas_disponiveis_abc = sorted(faturado['Marca'].dropna().unique())
 
     # Criar sub-abas para cada marca
-    subtabs_abc = st.tabs([f"🏷️ {marca}" for marca in marcas_disponiveis_abc])
+    subtabs_abc = st.tabs([f"{marca}" for marca in marcas_disponiveis_abc])
 
     def classificar_abc(percentual_acumulado):
         if percentual_acumulado <= 80:
@@ -2522,7 +2285,7 @@ with aba_curva_abc:
 
     for idx, marca in enumerate(marcas_disponiveis_abc):
         with subtabs_abc[idx]:
-            st.subheader(f"📊 Curva ABC - {marca}")
+            st.subheader(f"Curva ABC - {marca}")
             
             # Filtrar dados da marca
             faturado_marca = faturado[faturado['Marca'] == marca].copy()
@@ -2561,7 +2324,7 @@ with aba_curva_abc:
                     x=top_10_por_classe['Desc Item'],
                     y=top_10_por_classe['Vl Net Livro'],
                     name='Faturamento',
-                    marker_color=['#1f77b4' if cat == 'A' else '#ff7f0e' if cat == 'B' else '#2ca02c' 
+                    marker_color=[ui.CORES['primaria'] if cat == 'A' else ui.CORES['destaque'] if cat == 'B' else ui.CORES['positivo'] 
                                   for cat in top_10_por_classe['Classificacao_ABC']],
                     text=top_10_por_classe['Valor_Formatado'],
                     textposition='outside'
@@ -2574,13 +2337,13 @@ with aba_curva_abc:
                     mode='lines+markers',
                     name='% Acumulado',
                     yaxis='y2',
-                    line=dict(color='red', width=3),
+                    line=dict(color=ui.CORES['texto'], width=2.5),
                     marker=dict(size=8)
                 ))
                 
                 # Configurar layout
                 fig_abc_marca.update_layout(
-                    title=f'📈 Top 10 Itens por Classe ABC - {marca}',
+                    title=f'Top 10 Itens por Classe ABC - {marca}',
                     xaxis_title='Item',
                     yaxis_title='Faturamento (R$)',
                     yaxis2=dict(
@@ -2602,27 +2365,24 @@ with aba_curva_abc:
                 )
                 
                 # Adicionar linhas de referência para classificação ABC
-                fig_abc_marca.add_hline(y=80, line_dash="dash", line_color="red", 
+                fig_abc_marca.add_hline(y=80, line_dash="dash", line_color=ui.CORES["negativo"], 
                                       annotation_text="80% - Classe A", annotation_position="top right")
-                fig_abc_marca.add_hline(y=95, line_dash="dash", line_color="orange", 
+                fig_abc_marca.add_hline(y=95, line_dash="dash", line_color=ui.CORES["destaque"], 
                                       annotation_text="95% - Classe B", annotation_position="top right")
                 
                 st.plotly_chart(fig_abc_marca, use_container_width=True)
                 
                 # Mostrar tabela de classificação ABC (apenas top 10 de cada classe) em expander
-                with st.expander(f"📋 Top 10 Itens por Classe ABC - {marca}", expanded=False):
+                with st.expander(f"Top 10 Itens por Classe ABC - {marca}", expanded=False):
                     # Preparar dados para exibição (usando top_10_por_classe)
-                    df_abc_exibicao = top_10_por_classe[['Desc Item', 'Valor_Formatado', 'Percentual', 'Percentual_Acumulado', 'Classificacao_ABC']].copy()
+                    df_abc_exibicao = top_10_por_classe[['Desc Item', 'Vl Net Livro', 'Percentual', 'Percentual_Acumulado', 'Classificacao_ABC']].copy()
                     df_abc_exibicao.columns = ['Item', 'Faturamento', '% Individual', '% Acumulado', 'Classificação']
                     
                     # Formatar percentuais
-                    df_abc_exibicao['% Individual'] = df_abc_exibicao['% Individual'].apply(lambda x: f"{x:.1f}%")
-                    df_abc_exibicao['% Acumulado'] = df_abc_exibicao['% Acumulado'].apply(lambda x: f"{x:.1f}%")
-                    
-                    st.dataframe(df_abc_exibicao, use_container_width=True, hide_index=True)
+                    ui.tabela(df_abc_exibicao, hide_index=True)
                 
                 # Resumo por classificação ABC (top 10 de cada classe)
-                st.subheader(f"📊 Resumo Top 10 por Classe ABC - {marca}")
+                st.subheader(f"Resumo Top 10 por Classe ABC - {marca}")
                 
                 resumo_abc_marca = top_10_por_classe.groupby('Classificacao_ABC').agg({
                     'Desc Item': 'count',
@@ -2631,33 +2391,24 @@ with aba_curva_abc:
                 }).reset_index()
                 
                 resumo_abc_marca.columns = ['Classificação', 'Qtd Itens (Top 10)', 'Faturamento Total', '% do Total']
-                resumo_abc_marca['Faturamento Total Formatado'] = resumo_abc_marca['Faturamento Total'].apply(
-                    lambda x: formatar_valor_seguro(x, "currency")
-                )
-                resumo_abc_marca['% do Total'] = resumo_abc_marca['% do Total'].apply(lambda x: f"{x:.1f}%")
-                
-                # Exibir resumo
-                df_resumo_abc_marca = resumo_abc_marca[['Classificação', 'Qtd Itens (Top 10)', 'Faturamento Total Formatado', '% do Total']].copy()
-                df_resumo_abc_marca.columns = ['Classificação', 'Qtd Itens (Top 10)', 'Faturamento Total', '% do Total']
-                
-                st.dataframe(df_resumo_abc_marca, use_container_width=True, hide_index=True)
+                ui.tabela(resumo_abc_marca, hide_index=True)
                 
                 # Mostrar informações adicionais
                 total_itens_marca = len(faturamento_por_item)
                 total_itens_top10 = len(top_10_por_classe)
-                st.info(f"📊 **Total de itens da marca:** {total_itens_marca} | **Itens exibidos (Top 10 por classe):** {total_itens_top10}")
+                st.info(f"**Total de itens da marca:** {total_itens_marca} | **Itens exibidos (Top 10 por classe):** {total_itens_top10}")
                 
             else:
-                st.warning(f"⚠️ Nenhum dado encontrado para a marca {marca}")
+                st.warning(f"Nenhum dado encontrado para a marca {marca}")
 
     # Interpretação da curva ABC
-    st.subheader("💡 Interpretação da Curva ABC")
+    st.subheader("Interpretação da Curva ABC")
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
         st.info("""
-        **🔵 Classe A (0-80%)**
+        **Classe A (0-80%)**
         - Itens de maior importância
         - Foco principal de gestão
         - Controle rigoroso necessário
@@ -2665,7 +2416,7 @@ with aba_curva_abc:
 
     with col2:
         st.info("""
-        **🟠 Classe B (80-95%)**
+        **Classe B (80-95%)**
         - Itens de importância média
         - Controle moderado
         - Potencial de crescimento
@@ -2673,7 +2424,7 @@ with aba_curva_abc:
 
     with col3:
         st.info("""
-        **🟢 Classe C (95-100%)**
+        **Classe C (95-100%)**
         - Itens de menor importância
         - Controle simplificado
         - Análise de viabilidade
@@ -2681,9 +2432,9 @@ with aba_curva_abc:
 
 with aba_top_itens:
     # Título já formatado na aba
-    st.subheader(formatar_titulo_marcas("📊 Top Itens Faturados", marcas_selecionadas, marcas_disponiveis))
+    st.subheader(formatar_titulo_marcas("Top Itens Faturados", marcas_selecionadas, marcas_disponiveis))
 
-    # 🧼 Garantir que o Item está como string
+    # Garantir que o Item está como string
     faturado["Item"] = faturado["Item"].astype(str)
     # -------------------------------
     # Top 10 SKUs mais Faturados (Geral)
@@ -2697,10 +2448,10 @@ with aba_top_itens:
         x="Item",
         y="Quantidade",
         text="Quantidade",
-        title="🔥 Top 10 SKUs Mais Faturados (Geral)",
+        title="Top 10 SKUs Mais Faturados (Geral)",
         labels={"Quantidade": "Quantidade Faturada", "Item": "SKU"},
         color="Item",
-        color_discrete_sequence=px.colors.qualitative.Set1,
+        color_discrete_sequence=ui.SEQUENCIA_CATEGORICA,
     )
 
     fig_top_10_skus.update_traces(texttemplate="%{y:.0f}", textposition="outside")
@@ -2719,9 +2470,9 @@ with aba_top_itens:
         y="Quantidade",
         text="Item",
         color="Marca",
-        title="🏆 SKU Mais Faturado por Marca",
+        title="SKU Mais Faturado por Marca",
         labels={"Quantidade": "Quantidade Faturada", "Marca": "Marca"},
-        color_discrete_sequence=px.colors.qualitative.Set1,
+        color_discrete_sequence=ui.SEQUENCIA_CATEGORICA,
     )
 
     fig_top_sku_marca.update_traces(texttemplate="%{y:.0f}", textposition="outside")
@@ -2730,8 +2481,9 @@ with aba_top_itens:
     # Top 5 SKUs por Marca (com Facet)
     # -------------------------------
     df_top_5_skus_por_marca = (
-        df_sku_marca.groupby("Marca")
-        .apply(lambda x: x.nlargest(5, "Quantidade"))
+        df_sku_marca.sort_values("Quantidade", ascending=False)
+        .groupby("Marca", sort=False)
+        .head(5)
         .reset_index(drop=True)
     )
 
@@ -2741,10 +2493,10 @@ with aba_top_itens:
         y="Quantidade",
         color="Marca",
         facet_col="Marca",
-        title="📊 Top 5 SKUs por Marca",
+        title="Top 5 SKUs por Marca",
         labels={"Quantidade": "Quantidade Faturada", "Item": "SKU"},
         text="Quantidade",
-        color_discrete_sequence=px.colors.qualitative.Set1,
+        color_discrete_sequence=ui.SEQUENCIA_CATEGORICA,
     )
 
     fig_top_5_por_marca.update_traces(texttemplate="%{y:.0f}", textposition="outside")
@@ -2762,42 +2514,42 @@ with aba_top_itens:
     )
 
     with tab1:
-        # 🔍 Filtro de Seleção de Marca na aba col3
+        # Filtro de Seleção de Marca na aba col3
         marcas_disponiveis = sorted(faturado["Marca"].dropna().unique())
         marca_selecionada = st.selectbox("Escolha a Marca", options=marcas_disponiveis)
 
-        # 🧼 Filtrar os dados com base na marca selecionada
+        # Filtrar os dados com base na marca selecionada
         df_faturado_filtrado_marca = faturado[
             faturado["Marca"] == marca_selecionada
         ].copy()
 
-        # 🔢 Converter SKU para string (para evitar confusão no gráfico)
+        # Converter SKU para string (para evitar confusão no gráfico)
         df_faturado_filtrado_marca["Item"] = df_faturado_filtrado_marca["Item"].astype(str)
 
-        # 📊 Agrupar os dados filtrados por SKU e somar as quantidades faturadas
+        # Agrupar os dados filtrados por SKU e somar as quantidades faturadas
         df_top_skus_marca = (
             df_faturado_filtrado_marca.groupby(["Item", "Desc Item"])["Quantidade"]
             .sum()
             .reset_index()
         )
 
-        # 📈 Ordenar os SKUs pela quantidade faturada de forma decrescente
+        # Ordenar os SKUs pela quantidade faturada de forma decrescente
         df_top_skus_marca_sorted = df_top_skus_marca.sort_values(
             by="Quantidade", ascending=False
         )
 
-        # 🥇 Selecionar os 10 SKUs mais faturados
+        # Selecionar os 10 SKUs mais faturados
         df_top_10_skus_marca = df_top_skus_marca_sorted.head(10)
 
-        # 🎨 Gráfico de barras dos Top 10 SKUs da Marca Selecionada
+        # Gráfico de barras dos Top 10 SKUs da Marca Selecionada
         fig_top_10_skus_marca = px.bar(
             df_top_10_skus_marca,
             x="Desc Item",
             y="Quantidade",
-            title=f"📊 Top 10 SKUs mais Faturados - Marca: {marca_selecionada}",
+            title=f"Top 10 SKUs mais Faturados - Marca: {marca_selecionada}",
             labels={"Quantidade": "Quantidade Faturada", "Desc Item": "Descrição do Item"},
             color="Item",
-            color_discrete_sequence=px.colors.qualitative.Set1,
+            color_discrete_sequence=ui.SEQUENCIA_CATEGORICA,
             text_auto=True,
         )
 
@@ -2807,12 +2559,12 @@ with aba_top_itens:
 
     with tab2:
         st.write(
-            "📊 **Top 10 SKUs mais faturados em quantidade em todo o período selecionado**"
+            "**Top 10 SKUs mais faturados em quantidade em todo o período selecionado**"
         )
         st.plotly_chart(fig_top_10_skus, use_container_width=True)
 
         # Mostrar tabela detalhada
-        st.subheader("📋 Detalhes dos Top 10 SKUs")
+        st.subheader("Detalhes dos Top 10 SKUs")
         # Adicionar descrição dos itens
         df_top_10_com_desc = df_top_10_skus.merge(
             faturado[["Item", "Desc Item"]].drop_duplicates(), on="Item", how="left"
@@ -2829,18 +2581,14 @@ with aba_top_itens:
         )
 
         # Formatar quantidade
-        df_top_10_com_desc["Quantidade Total"] = df_top_10_com_desc[
-            "Quantidade Total"
-        ].apply(lambda x: formatar_valor_seguro(x, "number"))
-
-        st.dataframe(df_top_10_com_desc, use_container_width=True)
+        ui.tabela(df_top_10_com_desc, inteiro=["Quantidade Total"], hide_index=True)
 
     with tab3:
-        st.write("🏆 **SKU com maior quantidade faturada em cada marca**")
+        st.write("**SKU com maior quantidade faturada em cada marca**")
         st.plotly_chart(fig_top_sku_marca, use_container_width=True)
 
         # Mostrar tabela detalhada
-        st.subheader("📋 Detalhes por Marca")
+        st.subheader("Detalhes por Marca")
         # Adicionar descrição dos itens
         df_top_marca_com_desc = df_top_skus_por_marca.merge(
             faturado[["Item", "Desc Item"]].drop_duplicates(), on="Item", how="left"
@@ -2858,27 +2606,22 @@ with aba_top_itens:
         )
 
         # Formatar quantidade
-        df_top_marca_com_desc["Quantidade"] = df_top_marca_com_desc["Quantidade"].apply(
-            lambda x: formatar_valor_seguro(x, "number")
-        )
-
-        st.dataframe(df_top_marca_com_desc, use_container_width=True)
+        ui.tabela(df_top_marca_com_desc, inteiro=["Quantidade"], hide_index=True)
     
-st.divider()
-st.title("🔍 Busca Avançada")
+ui.secao("Busca avançada", "Pesquise notas fiscais por número, pedido do cliente ou razão social.")
 # Filtro de Canal de Venda
 
 # --- Novo bloco de busca ---
 col_busca1, col_busca2, col_busca3 = st.columns(3)
 
 with col_busca1:
-    busca_nf = st.text_input("🔍 Buscar por Nota Fiscal", value="", key="busca_nf")
+    busca_nf = st.text_input("Buscar por Nota Fiscal", value="", key="busca_nf")
 
 with col_busca2:
-    busca_pedcli = st.text_input("🔍 Buscar por Pedido Cliente", value="", key="busca_pedcli")
+    busca_pedcli = st.text_input("Buscar por Pedido Cliente", value="", key="busca_pedcli")
 
 with col_busca3:
-    busca_razao = st.text_input("🔍 Buscar por Razão Social", value="", key="busca_razao")
+    busca_razao = st.text_input("Buscar por Razão Social", value="", key="busca_razao")
 
 canais_disponiveis = sorted(faturado['Canal Venda Cliente'].dropna().unique()) if 'Canal Venda Cliente' in faturado.columns else []
 canal_selecionado = st.multiselect(
@@ -2913,6 +2656,6 @@ if busca_razao:
 if 'Nota Fiscal' in faturado_filtrado_can.columns:
     faturado_filtrado_can = faturado_filtrado_can.drop_duplicates(subset=['Nota Fiscal'])
 
-st.dataframe(faturado_filtrado_can, use_container_width=True)
+ui.tabela(faturado_filtrado_can, hide_index=True)
 
 

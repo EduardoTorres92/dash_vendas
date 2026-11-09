@@ -1,0 +1,5 @@
+node_modules/
+dist/
+# Gerados por ../scripts/exportar_dados.py
+public/data/
+tests/fixtures/

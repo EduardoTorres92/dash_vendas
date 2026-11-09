@@ -1,0 +1,30 @@
+# Versão web do dashboard (pasta web/). O build:
+#   1. instala as dependências do ETL em Python;
+#   2. exporta os dados para JSON com as mesmas regras do Streamlit (+ casos de paridade);
+#   3. roda o teste de paridade (se os números divergirem do Python, o deploy falha);
+#   4. gera o site estático com Vite.
+[build]
+  base = "web"
+  command = "pip install -r ../scripts/requirements.txt && npm run dados:paridade && npm test && npm run build"
+  publish = "dist"   # relativo a base: web/dist
+
+[build.environment]
+  NODE_VERSION = "22"
+  PYTHON_VERSION = "3.12"
+
+# Os dados mudam a cada deploy e o nome do arquivo é fixo: sempre revalidar.
+[[headers]]
+  for = "/data/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

@@ -53,6 +53,12 @@ O layout segue a direção visual gerada com a skill **UI/UX Pro Max** para o ti
 
 Tokens, CSS global, template Plotly (`dash_vendas`) e componentes (cabeçalho, seções, cards de KPI e de meta) ficam em `ui_theme.py`; o tema base do Streamlit está em `.streamlit/config.toml`.
 
+## 🌐 Versão Web (Netlify)
+
+Uma versão estática em **Vite + React + TypeScript** está em [`web/`](web/README.md), pronta para publicar na Netlify (`netlify.toml` na raiz). As regras de negócio continuam no Python: `scripts/exportar_dados.py` usa os mesmos ETLs para gerar o JSON consumido pelo site, e um teste de paridade garante que os números batem com o Streamlit.
+
+Por enquanto ela traz a seção **Faturamento líquido por marca** com todos os filtros; as demais seções seguem no Streamlit.
+
 ## 🚀 Instalação e Configuração
 
 ### Pré-requisitos
@@ -101,6 +107,9 @@ O dashboard será aberto automaticamente no seu navegador em `http://localhost:8
 ```
 Projeto Dash/
 ├── faturamento.py              # Dashboard principal (Streamlit)
+├── web/                        # Versão web (Vite + React + TS) para a Netlify
+├── scripts/exportar_dados.py   # Exporta os dados para JSON (usado pela versão web)
+├── netlify.toml                # Build e deploy da versão web
 ├── ui_theme.py                 # Design system (tokens, CSS, template Plotly, componentes)
 ├── .streamlit/config.toml      # Tema base do Streamlit
 ├── ETL_faturamento.py          # ETL de dados de faturamento

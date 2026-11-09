@@ -1,5 +1,0 @@
-# Dependências do exportador (scripts/exportar_dados.py), usadas no build da Netlify.
-# Só o necessário para rodar os ETLs; o Streamlit não é instalado.
-pandas>=2.1.0
-numpy>=1.24.0
-Faker>=20.0.0

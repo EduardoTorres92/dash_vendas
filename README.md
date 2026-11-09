@@ -53,6 +53,27 @@ O layout segue a direção visual gerada com a skill **UI/UX Pro Max** para o ti
 
 Tokens, CSS global, template Plotly (`dash_vendas`) e componentes (cabeçalho, seções, cards de KPI e de meta) ficam em `ui_theme.py`; o tema base do Streamlit está em `.streamlit/config.toml`.
 
+## 🏢 Uso Local na Empresa (dados reais)
+
+O painel roda **só no seu computador**: o Streamlit aceita conexões apenas de `127.0.0.1`, não envia estatísticas de uso e os arquivos são processados em memória, sem serem gravados em disco nem enviados para fora.
+
+1. **Sincronize o repositório** (só código; os dados não ficam no Git):
+   ```bash
+   git clone https://github.com/EduardoTorres92/dash_vendas.git   # primeira vez
+   git pull                                                       # nas próximas
+   ```
+2. **Abra o painel**: dê dois cliques em `iniciar.bat` (Windows) ou rode `./iniciar.sh` (macOS/Linux). Na primeira vez ele cria o ambiente Python (`.venv`) e instala as dependências; depois abre `http://localhost:8501`.
+3. **Carregue os dados pela tela inicial**:
+   - **Relatório de faturamento** (ESFT0100, `.csv` separado por `;`) — obrigatório;
+   - **Planilha de embarques** (`.xlsx`, aba `BASE ESGR0050 POTENCIAL`) — opcional, usada no Potencial x Faturamento.
+4. Para usar outro arquivo, clique em **Trocar dados** na barra lateral.
+
+Com arquivos enviados, os dados aparecem **como estão** (sem anonimização). O botão **Usar dados de demonstração** abre o painel com os dados fictícios do repositório, útil para desenvolver sem acesso aos dados reais.
+
+> 🔒 O `.gitignore` bloqueia `*.csv`, `*.xlsx` e `*.xls` (exceto os dois arquivos de demonstração), para que um relatório real nunca seja enviado ao GitHub por engano.
+
+Requisitos: Python 3.10+ (na instalação do Windows, marque *Add python.exe to PATH*). Se a rede da empresa usa proxy, configure-o no pip antes da primeira execução.
+
 ## 🚀 Instalação e Configuração
 
 ### Pré-requisitos
@@ -85,22 +106,20 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-4. **Prepare seus dados**
-   - Coloque seu arquivo de faturamento como `ESFT0100.csv` na raiz do projeto
-   - Coloque seu arquivo de embarques como `embarques_falsos.xlsx` (ou configure o nome no código)
-
-5. **Execute o dashboard**
+4. **Execute o dashboard**
 ```bash
 streamlit run faturamento.py
 ```
 
-O dashboard será aberto automaticamente no seu navegador em `http://localhost:8501`
+O dashboard abre no navegador em `http://localhost:8501`, na tela de carregamento: envie o relatório de faturamento (e, se quiser, a planilha de embarques) ou use os dados de demonstração. Veja [Uso Local na Empresa](#-uso-local-na-empresa-dados-reais).
 
 ## 📁 Estrutura do Projeto
 
 ```
 Projeto Dash/
 ├── faturamento.py              # Dashboard principal (Streamlit)
+├── fonte_dados.py              # Tela de carregamento dos arquivos (upload) e modo demonstração
+├── iniciar.bat / iniciar.sh    # Inicializadores do painel local
 ├── ui_theme.py                 # Design system (tokens, CSS, template Plotly, componentes)
 ├── .streamlit/config.toml      # Tema base do Streamlit
 ├── ETL_faturamento.py          # ETL de dados de faturamento
@@ -134,7 +153,9 @@ Projeto Dash/
 
 ### Estrutura Esperada do Arquivo de Faturamento (ESFT0100.csv)
 
-O arquivo CSV deve conter as seguintes colunas principais:
+CSV exportado do ERP, colunas separadas por `;` e codificação latin1 (ANSI). A tela de carregamento confere o formato e lista as colunas que estiverem faltando. Colunas usadas: `Marca`, `Deposito`, `Razao Social`, `Estado`, `Ped Cliente`, `Receita`, `Situacao Ped`, `Tipo Oper`, `Serie`, `Nota Fiscal`, `Dt Emis NF`, `Dt Embarque`, `Item`, `Desc Item`, `Localização`, `Quantidade`, `Vl Net Livro`, `Nro Embarque`, `Canal Venda Cliente`.
+
+Principais colunas:
 - `Marca`: Unidade de negócio
 - `Dt Emis NF`: Data de emissão da nota fiscal
 - `Item`: Código do produto

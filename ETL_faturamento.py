@@ -252,22 +252,34 @@ def anonimizar_pedidos(df):
     
     return df
 
-def carregar_dados_faturamento():
+COLUNAS_FATURAMENTO = [
+    'Marca', 'Deposito', 'Razao Social', 'Estado', 'Ped Cliente', 'Receita',
+    'Situacao Ped', 'Tipo Oper', 'Serie', 'Nota Fiscal', 'Dt Emis NF',
+    'Item', 'Desc Item', 'Localização', 'Quantidade', 'Vl Net Livro',
+    'Nro Embarque', 'Canal Venda Cliente', 'Dt Embarque'
+]
+
+
+def carregar_dados_faturamento(df_bruto=None, anonimizar=True):
     """
     Carrega dados de faturamento.
-    
-    Tenta carregar o arquivo processado (ESFT0100_processado.csv) primeiro.
-    Se não existir, carrega e processa o arquivo original (ESFT0100.csv).
-    
-    Para reprocessar dados: execute o script processar_dados_inicial.py
+
+    Com `df_bruto` (DataFrame do ESFT0100 no formato original do ERP, por
+    exemplo o arquivo enviado pela tela do dashboard), processa esses dados.
+    Sem ele, usa o arquivo de demonstração (ESFT0100_processado.csv) ou, se
+    não existir, o ESFT0100.csv da pasta do projeto.
+
+    `anonimizar=False` mantém item, descrição, razão social e pedido reais.
     """
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         arquivo_processado = os.path.join(current_dir, 'ESFT0100_processado.csv')
         arquivo_original = os.path.join(current_dir, 'ESFT0100.csv')
-        
+
+        if df_bruto is not None:
+            df_faturamento = processar_dados_faturamento(df_bruto[COLUNAS_FATURAMENTO].copy(), anonimizar)
         # Tentar carregar arquivo processado
-        if os.path.exists(arquivo_processado):
+        elif os.path.exists(arquivo_processado):
             print("⚡ Carregando dados processados (rápido)...")
             df_faturamento = pd.read_csv(
                 arquivo_processado, 
@@ -283,21 +295,14 @@ def carregar_dados_faturamento():
             print("⚠️  Arquivo processado não encontrado. Processando dados originais...")
             print("💡 Execute 'python processar_dados_inicial.py' para gerar o arquivo processado.")
             
-            colunas = [
-                'Marca', 'Deposito', 'Razao Social', 'Estado', 'Ped Cliente', 'Receita',
-                'Situacao Ped', 'Tipo Oper', 'Serie', 'Nota Fiscal', 'Dt Emis NF',
-                'Item', 'Desc Item', 'Localização', 'Quantidade', 'Vl Net Livro', 
-                'Nro Embarque', 'Canal Venda Cliente', 'Dt Embarque'
-            ]
-            
             df_faturamento = pd.read_csv(
-                arquivo_original, 
-                sep=';', 
-                encoding='latin1', 
-                usecols=colunas, 
+                arquivo_original,
+                sep=';',
+                encoding='latin1',
+                usecols=COLUNAS_FATURAMENTO,
                 dtype={'Nota Fiscal': str, 'Nro Embarque': str}
             )
-            df_faturamento = processar_dados_faturamento(df_faturamento)
+            df_faturamento = processar_dados_faturamento(df_faturamento, anonimizar)
         
         # Aplicar filtros finais (sempre necessários)
         df_faturamento = df_faturamento[df_faturamento['Serie'].isin(["3", "12"])]
@@ -319,14 +324,15 @@ def carregar_dados_faturamento():
         traceback.print_exc()
         return pd.DataFrame()
 
-def processar_dados_faturamento(df_faturamento):
+def processar_dados_faturamento(df_faturamento, anonimizar=True):
     """
     Processa e limpa os dados de faturamento.
     """
     # Anonimizar dados de Item, Razão Social e Pedidos
-    df_faturamento = anonimizar_itens(df_faturamento)
-    df_faturamento = anonimizar_razao_social(df_faturamento)
-    df_faturamento = anonimizar_pedidos(df_faturamento)
+    if anonimizar:
+        df_faturamento = anonimizar_itens(df_faturamento)
+        df_faturamento = anonimizar_razao_social(df_faturamento)
+        df_faturamento = anonimizar_pedidos(df_faturamento)
     
     # Converter tipos de dados
     df_faturamento['Serie'] = df_faturamento['Serie'].astype(str)
@@ -1476,13 +1482,21 @@ def calcular_nfs_acumuladas(df_faturamento):
 # FUNÇÕES PARA DADOS DE DEVOLUÇÃO
 # ============================================================================
 
-def carregar_dados_devolucao():
+COLUNAS_DEVOLUCAO = [
+    'Marca', 'Razao Social', 'Estado', 'Ped Cliente', 'Receita',
+    'Tipo Oper', 'Serie', 'Nota Fiscal', 'Dt Emis NF', 'Item',
+    'Desc Item', 'Localização', 'Quantidade', 'Vl Net Livro', 'Nro Embarque'
+]
+
+
+def carregar_dados_devolucao(df_bruto=None, anonimizar=True):
     """
     Carrega dados de devolução.
-    
-    Tenta carregar o arquivo processado (ESFT0100_processado.csv) primeiro.
-    Se não existir, carrega e processa o arquivo original (ESFT0100.csv).
-    
+
+    Com `df_bruto` (ESFT0100 no formato original), processa esses dados.
+    Sem ele, usa o arquivo de demonstração (ESFT0100_processado.csv) ou, se
+    não existir, o ESFT0100.csv da pasta do projeto.
+
     Returns:
         pd.DataFrame: DataFrame processado com dados de devolução
     """
@@ -1493,7 +1507,7 @@ def carregar_dados_devolucao():
     arquivo_original = os.path.join(current_dir, 'ESFT0100.csv')
     
     # Tentar carregar arquivo processado
-    if os.path.exists(arquivo_processado):
+    if df_bruto is None and os.path.exists(arquivo_processado):
         print("⚡ Carregando dados de devolução (processados)...")
         
         # Carregar arquivo processado
@@ -1519,26 +1533,23 @@ def carregar_dados_devolucao():
     print("⚠️  Processando devoluções do arquivo original...")
     devolucao_path = arquivo_original
     
-    # Colunas necessárias para devolução
-    colunas_devolucao = [
-        'Marca', 'Razao Social', 'Estado', 'Ped Cliente', 'Receita', 
-        'Tipo Oper', 'Serie', 'Nota Fiscal', 'Dt Emis NF', 'Item', 
-        'Desc Item', 'Localização', 'Quantidade', 'Vl Net Livro', 'Nro Embarque'
-    ]
-    
     # Carregar dados
-    df_devolucao = pd.read_csv(
-        devolucao_path, 
-        sep=';', 
-        encoding='latin1', 
-        usecols=colunas_devolucao, 
-        dtype={'Nota Fiscal': str, 'Nro Embarque': str}
-    )
-    
+    if df_bruto is not None:
+        df_devolucao = df_bruto[COLUNAS_DEVOLUCAO].copy()
+    else:
+        df_devolucao = pd.read_csv(
+            devolucao_path,
+            sep=';',
+            encoding='latin1',
+            usecols=COLUNAS_DEVOLUCAO,
+            dtype={'Nota Fiscal': str, 'Nro Embarque': str}
+        )
+
     # Anonimizar dados de Item, Razão Social e Pedidos
-    df_devolucao = anonimizar_itens(df_devolucao)
-    df_devolucao = anonimizar_razao_social(df_devolucao)
-    df_devolucao = anonimizar_pedidos(df_devolucao)
+    if anonimizar:
+        df_devolucao = anonimizar_itens(df_devolucao)
+        df_devolucao = anonimizar_razao_social(df_devolucao)
+        df_devolucao = anonimizar_pedidos(df_devolucao)
     
     # Converter coluna Serie para string
     df_devolucao['Serie'] = df_devolucao['Serie'].astype(str)

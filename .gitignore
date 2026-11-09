@@ -2,3 +2,11 @@ __pycache__/
 *.pyc
 .venv/
 .env
+
+# Dados reais: nunca versionar. Só os arquivos fictícios de demonstração entram no Git.
+*.csv
+*.xlsx
+*.xls
+!ESFT0100_processado.csv
+!embarques_falsos.xlsx
+.cache_anonimizacao.pkl

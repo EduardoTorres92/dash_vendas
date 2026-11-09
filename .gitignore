@@ -7,6 +7,9 @@ __pycache__/
 *.csv
 *.xlsx
 *.xls
-!ESFT0100_processado.csv
-!embarques_falsos.xlsx
+!dados_demo/faturamento_demo.csv
+!dados_demo/embarques_demo.xlsx
 .cache_anonimizacao.pkl
+
+# Configuração com os valores reais do ERP (veja config_negocio.py)
+config_local.py

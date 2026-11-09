@@ -64,9 +64,11 @@ O painel roda **só no seu computador**: o Streamlit aceita conexões apenas de 
    ```
 2. **Abra o painel**: dê dois cliques em `iniciar.bat` (Windows) ou rode `./iniciar.sh` (macOS/Linux). Na primeira vez ele cria o ambiente Python (`.venv`) e instala as dependências; depois abre `http://localhost:8501`.
 3. **Carregue os dados pela tela inicial**:
-   - **Relatório de faturamento** (ESFT0100, `.csv` separado por `;`) — obrigatório;
-   - **Planilha de embarques** (`.xlsx`, aba `BASE ESGR0050 POTENCIAL`) — opcional, usada no Potencial x Faturamento.
+   - **Relatório de faturamento** (`.csv` separado por `;`) — obrigatório;
+   - **Planilha de embarques** (`.xlsx`) — opcional, usada no Potencial x Faturamento.
 4. Para usar outro arquivo, clique em **Trocar dados** na barra lateral.
+
+**Configuração do seu ERP:** códigos de tipo de operação, canais, depósitos e séries ficam em `config_local.py` (fora do Git), a partir do exemplo `config_negocio.py`. Veja [README_DADOS.md](README_DADOS.md).
 
 Com arquivos enviados, os dados aparecem **como estão** (sem anonimização). O botão **Usar dados de demonstração** abre o painel com os dados fictícios do repositório, útil para desenvolver sem acesso aos dados reais.
 
@@ -119,6 +121,9 @@ O dashboard abre no navegador em `http://localhost:8501`, na tela de carregament
 Projeto Dash/
 ├── faturamento.py              # Dashboard principal (Streamlit)
 ├── fonte_dados.py              # Tela de carregamento dos arquivos (upload) e modo demonstração
+├── config_negocio.py           # Parâmetros de negócio (exemplo genérico)
+├── configuracao.py             # Junta config_negocio.py e o config_local.py (fora do Git)
+├── dados_demo/                 # Dados fictícios de demonstração
 ├── iniciar.bat / iniciar.sh    # Inicializadores do painel local
 ├── ui_theme.py                 # Design system (tokens, CSS, template Plotly, componentes)
 ├── .streamlit/config.toml      # Tema base do Streamlit
@@ -129,8 +134,7 @@ Projeto Dash/
 ├── br_states.json              # Coordenadas dos estados brasileiros
 ├── requirements.txt            # Dependências do projeto
 ├── README.md                   # Este arquivo
-├── README_EMBARQUES.md         # Documentação de embarques
-└── README_PROCESSAMENTO.md     # Documentação do ETL
+└── README_DADOS.md             # Fontes de dados, configuração e formato dos arquivos
 ```
 
 ## 📊 Visualizações Disponíveis
@@ -151,25 +155,7 @@ Projeto Dash/
 
 ## 🔧 Configuração de Dados
 
-### Estrutura Esperada do Arquivo de Faturamento (ESFT0100.csv)
-
-CSV exportado do ERP, colunas separadas por `;` e codificação latin1 (ANSI). A tela de carregamento confere o formato e lista as colunas que estiverem faltando. Colunas usadas: `Marca`, `Deposito`, `Razao Social`, `Estado`, `Ped Cliente`, `Receita`, `Situacao Ped`, `Tipo Oper`, `Serie`, `Nota Fiscal`, `Dt Emis NF`, `Dt Embarque`, `Item`, `Desc Item`, `Localização`, `Quantidade`, `Vl Net Livro`, `Nro Embarque`, `Canal Venda Cliente`.
-
-Principais colunas:
-- `Marca`: Unidade de negócio
-- `Dt Emis NF`: Data de emissão da nota fiscal
-- `Item`: Código do produto
-- `Desc Item`: Descrição do produto
-- `Razao Social`: Nome do cliente
-- `Ped Cliente`: Número do pedido
-- `Vl Net Livro`: Valor líquido
-- `Canal Venda Cliente`: Canal de venda
-- `Estado`: UF do cliente
-- `Nota Fiscal`: Número da nota fiscal
-
-### Estrutura Esperada do Arquivo de Embarques
-
-Consulte `README_EMBARQUES.md` para detalhes completos.
+Formato dos arquivos, colunas usadas e parâmetros de configuração: veja [README_DADOS.md](README_DADOS.md).
 
 ## ⚙️ Personalização
 
@@ -214,8 +200,7 @@ O sistema utiliza hash MD5 para garantir:
 
 ## 📝 Documentação Adicional
 
-- 📘 [README_PROCESSAMENTO.md](README_PROCESSAMENTO.md) - Guia completo do sistema ETL
-- 📗 [README_EMBARQUES.md](README_EMBARQUES.md) - Sistema de análise de embarques
+- 📘 [README_DADOS.md](README_DADOS.md) - Fontes de dados, configuração do ERP e formato dos arquivos
 
 ## 🤝 Contribuindo
 
@@ -235,13 +220,8 @@ Contribuições são bem-vindas! Para contribuir:
 
 ## 🐛 Problemas Comuns e Soluções
 
-### Dashboard não carrega dados
-```bash
-# Verifique se o arquivo de dados existe
-ls ESFT0100.csv
-
-# Se não existir, coloque seu arquivo de dados na raiz do projeto
-```
+### O painel não encontra registros no arquivo enviado
+Confira se as séries, depósitos e tipos de operação em `config_local.py` correspondem aos do seu ERP (veja [README_DADOS.md](README_DADOS.md)).
 
 ### Erro de módulo não encontrado
 ```bash
@@ -257,10 +237,7 @@ streamlit run faturamento.py
 ```
 
 ### Performance lenta
-```bash
-# Verifique se está usando o arquivo processado
-# O arquivo ESFT0100_processado.csv deve existir para melhor performance
-```
+O primeiro carregamento de um arquivo grande leva alguns segundos; depois os resultados ficam em cache enquanto o mesmo arquivo estiver carregado.
 
 ## 📄 Licença
 

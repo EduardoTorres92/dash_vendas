@@ -16,6 +16,8 @@ from faker import Faker
 import hashlib
 import pickle
 
+import configuracao as cfg
+
 # Adicionar o diretório atual ao path para importar as funções de cut-off
 current_dir = os.path.dirname(os.path.abspath(__file__))
 # O arquivo cut_off_mensal.py agora está na raiz do projeto
@@ -264,23 +266,23 @@ def carregar_dados_faturamento(df_bruto=None, anonimizar=True):
     """
     Carrega dados de faturamento.
 
-    Com `df_bruto` (DataFrame do ESFT0100 no formato original do ERP, por
+    Com `df_bruto` (relatório de faturamento no formato original do ERP, por
     exemplo o arquivo enviado pela tela do dashboard), processa esses dados.
-    Sem ele, usa o arquivo de demonstração (ESFT0100_processado.csv) ou, se
-    não existir, o ESFT0100.csv da pasta do projeto.
+    Sem ele, usa o arquivo de demonstração (cfg.ARQUIVO_DEMO_FATURAMENTO) ou,
+    se não existir, o relatório real deixado na pasta (cfg.ARQUIVO_FATURAMENTO).
 
     `anonimizar=False` mantém item, descrição, razão social e pedido reais.
     """
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        arquivo_processado = os.path.join(current_dir, 'ESFT0100_processado.csv')
-        arquivo_original = os.path.join(current_dir, 'ESFT0100.csv')
+        arquivo_processado = os.path.join(current_dir, cfg.ARQUIVO_DEMO_FATURAMENTO)
+        arquivo_original = os.path.join(current_dir, cfg.ARQUIVO_FATURAMENTO)
 
         if df_bruto is not None:
             df_faturamento = processar_dados_faturamento(df_bruto[COLUNAS_FATURAMENTO].copy(), anonimizar)
         # Tentar carregar arquivo processado
         elif os.path.exists(arquivo_processado):
-            print("⚡ Carregando dados processados (rápido)...")
+            print("⚡ Carregando dados de demonstração...")
             df_faturamento = pd.read_csv(
                 arquivo_processado, 
                 sep=';', 
@@ -292,8 +294,7 @@ def carregar_dados_faturamento(df_bruto=None, anonimizar=True):
             df_faturamento['Dt Embarque'] = pd.to_datetime(df_faturamento['Dt Embarque'], errors='coerce')
             print(f"✅ Dados carregados: {len(df_faturamento):,} registros")
         else:
-            print("⚠️  Arquivo processado não encontrado. Processando dados originais...")
-            print("💡 Execute 'python processar_dados_inicial.py' para gerar o arquivo processado.")
+            print("⚠️  Dados de demonstração não encontrados. Processando o relatório da pasta...")
             
             df_faturamento = pd.read_csv(
                 arquivo_original,
@@ -305,9 +306,9 @@ def carregar_dados_faturamento(df_bruto=None, anonimizar=True):
             df_faturamento = processar_dados_faturamento(df_faturamento, anonimizar)
         
         # Aplicar filtros finais (sempre necessários)
-        df_faturamento = df_faturamento[df_faturamento['Serie'].isin(["3", "12"])]
-        df_faturamento = df_faturamento[df_faturamento['Deposito'].isin(['CD', 'CI', 'DPA', 'DEV', 'MTK', 'APA', 'N/A', 'MKT'])]
-        df_faturamento = df_faturamento[~df_faturamento['Desc Item'].isin(['PTO', 'cons001'])]
+        df_faturamento = df_faturamento[df_faturamento['Serie'].isin(cfg.SERIES_NOTA_FISCAL)]
+        df_faturamento = df_faturamento[df_faturamento['Deposito'].isin(cfg.DEPOSITOS_FATURAMENTO)]
+        df_faturamento = df_faturamento[~df_faturamento['Desc Item'].isin(cfg.ITENS_EXCLUIDOS)]
         
 
         # Fill NAs
@@ -336,7 +337,7 @@ def processar_dados_faturamento(df_faturamento, anonimizar=True):
     
     # Converter tipos de dados
     df_faturamento['Serie'] = df_faturamento['Serie'].astype(str)
-    df_faturamento = df_faturamento[df_faturamento['Serie'].isin(["3", "12"])]
+    df_faturamento = df_faturamento[df_faturamento['Serie'].isin(cfg.SERIES_NOTA_FISCAL)]
 
     # Esta linha está errada se a intenção é filtrar/remover a marca "?" do DataFrame.
     # O que ela faz: transforma a coluna "Marca" em uma coluna booleana (True/False), destruindo os dados originais.
@@ -351,7 +352,7 @@ def processar_dados_faturamento(df_faturamento, anonimizar=True):
     # Para trocar explicitamente valores em branco ou NaN por 'N/A', use:
     df_faturamento['Deposito'] = df_faturamento['Deposito'].replace('', pd.NA).fillna('N/A')
     df_faturamento['Dt Embarque'] = df_faturamento['Dt Embarque'].replace('?', pd.NA).fillna('')
-    df_faturamento = df_faturamento[df_faturamento['Deposito'].isin(['CD', 'CI', 'DPA', 'DEV', 'MTK', 'APA', 'N/A', 'MKT'])]
+    df_faturamento = df_faturamento[df_faturamento['Deposito'].isin(cfg.DEPOSITOS_FATURAMENTO)]
     
     
     
@@ -374,80 +375,18 @@ def processar_dados_faturamento(df_faturamento, anonimizar=True):
     # Padronizar e categorizar canais de venda
     df_faturamento['Canal Venda Cliente'] = df_faturamento['Canal Venda Cliente'].fillna('N/A')
     
-    # Mapeamento de canais específicos para categorias mais amplas
-    mapeamento_canais = {
-        # B2B ATACADO
-        'ATACADISTA': 'B2B ATACADO',
-        'DISTRIBUIDOR': 'B2B ATACADO',
-        'DISTRIBUIDOR VAR': 'B2B ATACADO',
-        
-        # B2B VAREJO
-        'FERRAGISTA': 'B2B VAREJO',
-        'MATERIAL DE CONSTRUCAO': 'B2B VAREJO',
-        'HOME CENTER': 'B2B VAREJO',
-        'CHAVEIRO': 'B2B VAREJO',
-        'VAREJO VIP': 'B2B VAREJO',
-        
-        # B2B PROFISSIONAL
-        'INTEGRADOR': 'B2B PROFISSIONAL',
-        'INTEGRADOR VAR': 'B2B PROFISSIONAL',
-        'INSTALADOR': 'B2B PROFISSIONAL',
-        'CONSTRUTORA': 'B2B PROFISSIONAL',
-        'SEGURANCA ELETRONICA': 'B2B PROFISSIONAL',
-        'PROTECAO A INCENDIO': 'B2B PROFISSIONAL',
-        
-        # B2C
-        'CONSUMIDOR FINAL PJ': 'B2C',
-        'CONSUMIDOR FINAL PF': 'B2C',
-        'PESSOA FISICA': 'B2C',
-        'CLIENTE FINAL': 'B2C',
-        
-        # E-COMMERCE
-        'WEBSHOP': 'E-COMMERCE',
-        
-        # OEM
-        'OEM': 'OEM',
-        'VENDA DIRETA': 'OEM',
-        
-        # INTERCOMPANY
-        'INTERCOMPANY/BRZ': 'VENDA INTERNA',
-        
-        # NOVOS CANAIS
-        'NOVOS CANAIS': 'NOVOS CANAIS',
-    }
+    # Mapeamento de canais: configuracao.MAPEAMENTO_CANAIS
     
     # Aplicar mapeamento
-    df_faturamento['Canal Venda Cliente'] = df_faturamento['Canal Venda Cliente'].replace(mapeamento_canais)
+    df_faturamento['Canal Venda Cliente'] = df_faturamento['Canal Venda Cliente'].replace(cfg.MAPEAMENTO_CANAIS)
   
     # Filtrar apenas os tipos de operação permitidos, padronizando o nome da coluna para 'Tipo Oper'
     if 'Tipo Oper' in df_faturamento.columns:
-        # Ajuste para considerar os tipos de operação conforme definido
-        operacoes_faturamento = [
-            "1 - Receita",                    # Receita Sim
-            "20 - Receita Revenda",           # Receita Sim
-            "9 - Brindes / Bonificacao",    # Receita Não
-            "15 - Transferencia"              # Receita Não
-        ]
-        df_faturamento = df_faturamento[df_faturamento['Tipo Oper'].astype(str).isin(operacoes_faturamento)]
-        
+        # Só entram as operações configuradas (configuracao.TIPOS_OPERACAO_FATURAMENTO)
+        df_faturamento = df_faturamento[df_faturamento['Tipo Oper'].astype(str).isin(list(cfg.TIPOS_OPERACAO_FATURAMENTO))]
+
         # Categorizar tipos de operação
-        mapeamento_tipo_oper = {
-            # RECEITA DIRETA
-            '1 - Receita': 'RECEITA DIRETA',
-            
-            # RECEITA REVENDA
-            '20 - Receita Revenda': 'RECEITA REVENDA',
-            
-            # BONIFICAÇÃO
-            '9 - Brindes / Bonificacao': 'BONIFICAÇÃO',
-            
-            # TRANSFERÊNCIA
-            '15 - Transferencia': 'TRANSFERÊNCIA',
-            
-            # DEVOLUÇÃO (caso apareçam nos dados)
-            '5 - Dev Venda': 'DEVOLUÇÃO',
-            '21 - Dev Compra': 'DEVOLUÇÃO',
-        }
+        mapeamento_tipo_oper = dict(cfg.TIPOS_OPERACAO_FATURAMENTO)
         
         # Aplicar categorização
         df_faturamento['Tipo Oper'] = df_faturamento['Tipo Oper'].replace(mapeamento_tipo_oper)
@@ -463,12 +402,11 @@ def processar_dados_faturamento(df_faturamento, anonimizar=True):
     
     
     
-    df_faturamento = df_faturamento[~df_faturamento['Desc Item'].isin(['PTO', 'cons001'])]
+    df_faturamento = df_faturamento[~df_faturamento['Desc Item'].isin(cfg.ITENS_EXCLUIDOS)]
     
         # Filtrar marcas indesejadas
     if "Marca" in df_faturamento.columns:
-        indesejadas = {"?", "MTK CD SP"}
-        df_faturamento = df_faturamento[~df_faturamento["Marca"].isin(indesejadas)]
+        df_faturamento = df_faturamento[~df_faturamento["Marca"].isin(cfg.MARCAS_EXCLUIDAS)]
     return df_faturamento
 
 
@@ -741,7 +679,9 @@ def lead_time(df_faturamento):
     if df_filtrado.empty:
         return pd.DataFrame(columns=['Marca', 'Lead Time Médio (dias úteis)', 'Qtd Registros', 'Lead Time Min', 'Lead Time Max'])
     
-    df_filtrado = df_filtrado[df_filtrado['Canal Venda Cliente'] != 'INTERCOMPANY/BRZ']
+    # Exclui vendas internas (o canal já mapeado e os códigos que viram "VENDA INTERNA")
+    vendas_internas = ['VENDA INTERNA'] + [k for k, v in cfg.MAPEAMENTO_CANAIS.items() if v == 'VENDA INTERNA']
+    df_filtrado = df_filtrado[~df_filtrado['Canal Venda Cliente'].isin(vendas_internas)]
     
     # Converter datas para datetime se necessário
     df_filtrado['Dt Embarque'] = pd.to_datetime(df_filtrado['Dt Embarque'], errors='coerce')
@@ -1493,9 +1433,9 @@ def carregar_dados_devolucao(df_bruto=None, anonimizar=True):
     """
     Carrega dados de devolução.
 
-    Com `df_bruto` (ESFT0100 no formato original), processa esses dados.
-    Sem ele, usa o arquivo de demonstração (ESFT0100_processado.csv) ou, se
-    não existir, o ESFT0100.csv da pasta do projeto.
+    Com `df_bruto` (relatório de faturamento no formato original), processa
+    esses dados. Sem ele, usa o arquivo de demonstração ou, se não existir, o
+    relatório real deixado na pasta (veja configuracao.py).
 
     Returns:
         pd.DataFrame: DataFrame processado com dados de devolução
@@ -1503,8 +1443,8 @@ def carregar_dados_devolucao(df_bruto=None, anonimizar=True):
     import os
     
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    arquivo_processado = os.path.join(current_dir, 'ESFT0100_processado.csv')
-    arquivo_original = os.path.join(current_dir, 'ESFT0100.csv')
+    arquivo_processado = os.path.join(current_dir, cfg.ARQUIVO_DEMO_FATURAMENTO)
+    arquivo_original = os.path.join(current_dir, cfg.ARQUIVO_FATURAMENTO)
     
     # Tentar carregar arquivo processado
     if df_bruto is None and os.path.exists(arquivo_processado):
@@ -1523,7 +1463,7 @@ def carregar_dados_devolucao(df_bruto=None, anonimizar=True):
         
         # Filtrar apenas devoluções
         df_devolucao = df_devolucao[df_devolucao['Tipo Oper'] == 'DEVOLUÇÃO']
-        df_devolucao = df_devolucao[df_devolucao['Localização'] != 'EXPORTAÇÃO']
+        df_devolucao = df_devolucao[df_devolucao['Localização'] != cfg.LOCALIZACAO_EXPORTACAO]
         df_devolucao = df_devolucao.dropna(subset=['Dt Emis NF'])
         
         print(f"✅ Devoluções carregadas: {len(df_devolucao):,} registros")
@@ -1557,8 +1497,7 @@ def carregar_dados_devolucao(df_bruto=None, anonimizar=True):
     # Limpar e padronizar marcas
     if "Marca" in df_devolucao.columns:
         # Remover marcas indesejadas (as unidades já estão padronizadas no arquivo processado)
-        indesejadas = {"?", "MTK CD SP"}
-        df_devolucao = df_devolucao[~df_devolucao["Marca"].isin(indesejadas)]
+        df_devolucao = df_devolucao[~df_devolucao["Marca"].isin(cfg.MARCAS_EXCLUIDAS)]
 
 
     # Preencher valores nulos
@@ -1592,18 +1531,15 @@ def carregar_dados_devolucao(df_bruto=None, anonimizar=True):
             df_devolucao[col] = pd.to_numeric(serie, errors="coerce").fillna(0.0).abs()
     
     # Categorizar tipos de operação antes de filtrar
-    mapeamento_tipo_oper = {
-        '5 - Dev Venda': 'DEVOLUÇÃO',
-        '21 - Dev Compra': 'DEVOLUÇÃO',
-    }
+    mapeamento_tipo_oper = {codigo: 'DEVOLUÇÃO' for codigo in cfg.TIPOS_OPERACAO_DEVOLUCAO}
     df_devolucao['Tipo Oper'] = df_devolucao['Tipo Oper'].replace(mapeamento_tipo_oper)
     
     # Filtrar apenas devoluções
     devolucao_filtros = ['DEVOLUÇÃO']
     df_devolucao = df_devolucao[df_devolucao['Tipo Oper'].isin(devolucao_filtros)]
     
-    # Remover registros onde Localização = 'EXPORTAÇÃO'
-    df_devolucao = df_devolucao[df_devolucao['Localização'] != 'EXPORTAÇÃO']
+    # Remover registros de exportação
+    df_devolucao = df_devolucao[df_devolucao['Localização'] != cfg.LOCALIZACAO_EXPORTACAO]
     
     # Converter coluna de data
     if 'Dt Emis NF' in df_devolucao.columns:

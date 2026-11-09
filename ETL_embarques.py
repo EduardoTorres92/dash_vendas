@@ -4,6 +4,8 @@ from faker import Faker
 import hashlib
 import os
 
+import configuracao as cfg
+
 # Inicializar Faker e dicionários de cache globais
 _faker = Faker('pt_BR')
 _cache_item = {}
@@ -193,6 +195,34 @@ def anonimizar_pedidos(df):
     
     return df
 
+COLUNAS_EMBARQUES = [
+    'Estab', 'Unid. Negócio', 'Embarque', 'Dt Embarque', 'Status', 'PARADOS',
+    'Nr Ped Cli', 'Vl Net', 'Situação', 'Desc Canal', 'UF Cli',
+]
+
+
+def encontrar_aba_embarques(arquivo):
+    """
+    Aba da planilha de embarques: a configurada em cfg.ABA_EMBARQUES ou, se não
+    houver, a primeira que tiver todas as colunas esperadas.
+    Levanta ValueError com uma mensagem clara quando nenhuma aba serve.
+    """
+    if hasattr(arquivo, "seek"):
+        arquivo.seek(0)
+    planilha = pd.ExcelFile(arquivo)
+    if cfg.ABA_EMBARQUES:
+        if cfg.ABA_EMBARQUES not in planilha.sheet_names:
+            raise ValueError(f'A planilha de embarques não tem a aba "{cfg.ABA_EMBARQUES}".')
+        return cfg.ABA_EMBARQUES
+    for aba in planilha.sheet_names:
+        colunas = [str(c) for c in planilha.parse(aba, nrows=0).columns]
+        if all(c in colunas for c in COLUNAS_EMBARQUES):
+            return aba
+    raise ValueError(
+        "Nenhuma aba da planilha de embarques tem as colunas esperadas: " + ", ".join(COLUNAS_EMBARQUES)
+    )
+
+
 def etl_embarques(arquivo=None, anonimizar=True):
     colunas = [
         'Estab',
@@ -210,16 +240,16 @@ def etl_embarques(arquivo=None, anonimizar=True):
     # Obter caminho do arquivo Excel na raiz do projeto
     current_dir = os.path.dirname(os.path.abspath(__file__))
     
-    # Tentar carregar arquivo falso primeiro, se não existir, carregar o original
-    arquivo_falso = os.path.join(current_dir, 'embarques_falsos.xlsx')
-    arquivo_original = os.path.join(current_dir, 'AAB-PF - REPORT DIÁRIO FATURAMENTO 2025 - AAB.xlsx')
+    # Tentar carregar os dados de demonstração primeiro; se não existirem, a planilha real da pasta
+    arquivo_falso = os.path.join(current_dir, cfg.ARQUIVO_DEMO_EMBARQUES)
+    arquivo_original = os.path.join(current_dir, cfg.ARQUIVO_EMBARQUES)
     
     # `arquivo`: planilha enviada pela tela do dashboard (caminho ou arquivo em memória)
     if arquivo is not None:
         excel_path = arquivo
         eh_original = True
     elif os.path.exists(arquivo_falso):
-        print("⚡ Carregando embarques falsos (dados anonimizados)...")
+        print("⚡ Carregando embarques de demonstração...")
         excel_path = arquivo_falso
         eh_original = False
     else:
@@ -227,9 +257,11 @@ def etl_embarques(arquivo=None, anonimizar=True):
         excel_path = arquivo_original
         eh_original = True
     
+    if hasattr(excel_path, "seek"):
+        excel_path.seek(0)
     embarques = pd.read_excel(
         excel_path,
-        sheet_name="BASE ESGR0050 POTENCIAL", dtype={'Estab': str, 'Embarque': str, 'Nr Ped Cli': str}, usecols=colunas
+        sheet_name=encontrar_aba_embarques(excel_path), dtype={'Estab': str, 'Embarque': str, 'Nr Ped Cli': str}, usecols=colunas
     )
     
     # Anonimizar pedidos apenas se for arquivo original
@@ -238,7 +270,7 @@ def etl_embarques(arquivo=None, anonimizar=True):
     
     # ETL GERAL
     embarques = embarques.dropna(subset=['Estab'])
-    embarques = embarques[embarques['Unid. Negócio'] != 'XXXXXXXXXXXX']
+    embarques = embarques[~embarques['Unid. Negócio'].isin(cfg.UNIDADES_EMBARQUE_EXCLUIDAS)]
     embarques = embarques[embarques['UF Cli'] != 'EX']
     embarques['Dt Embarque'] = embarques['Dt Embarque'].dt.strftime('%d/%m/%Y')
     hoje_str = datetime.today().strftime('%d/%m/%Y')
@@ -247,50 +279,10 @@ def etl_embarques(arquivo=None, anonimizar=True):
     if eh_original and 'Desc Canal' in embarques.columns:
         embarques['Desc Canal'] = embarques['Desc Canal'].fillna('N/A')
         
-        # Mapeamento de canais específicos para categorias mais amplas
-        mapeamento_canais = {
-            # B2B ATACADO
-            'ATACADISTA': 'B2B ATACADO',
-            'DISTRIBUIDOR': 'B2B ATACADO',
-            'DISTRIBUIDOR VAR': 'B2B ATACADO',
-            
-            # B2B VAREJO
-            'FERRAGISTA': 'B2B VAREJO',
-            'MATERIAL DE CONSTRUCAO': 'B2B VAREJO',
-            'HOME CENTER': 'B2B VAREJO',
-            'CHAVEIRO': 'B2B VAREJO',
-            'VAREJO VIP': 'B2B VAREJO',
-            
-            # B2B PROFISSIONAL
-            'INTEGRADOR': 'B2B PROFISSIONAL',
-            'INTEGRADOR VAR': 'B2B PROFISSIONAL',
-            'INSTALADOR': 'B2B PROFISSIONAL',
-            'CONSTRUTORA': 'B2B PROFISSIONAL',
-            'SEGURANCA ELETRONICA': 'B2B PROFISSIONAL',
-            'PROTECAO A INCENDIO': 'B2B PROFISSIONAL',
-            
-            # B2C
-            'CONSUMIDOR FINAL PJ': 'B2C',
-            'CONSUMIDOR FINAL PF': 'B2C',
-            'PESSOA FISICA': 'B2C',
-            'CLIENTE FINAL': 'B2C',
-            
-            # E-COMMERCE
-            'WEBSHOP': 'E-COMMERCE',
-            
-            # OEM
-            'OEM': 'OEM',
-            'VENDA DIRETA': 'OEM',
-            
-            # INTERCOMPANY
-            'INTERCOMPANY/BRZ': 'VENDA INTERNA',
-            
-            # NOVOS CANAIS
-            'NOVOS CANAIS': 'NOVOS CANAIS',
-        }
+        # Mapeamento de canais: configuracao.MAPEAMENTO_CANAIS
         
         # Aplicar mapeamento
-        embarques['Desc Canal'] = embarques['Desc Canal'].replace(mapeamento_canais)
+        embarques['Desc Canal'] = embarques['Desc Canal'].replace(cfg.MAPEAMENTO_CANAIS)
         
         # Filtrar canal VENDA INTERNA
         embarques = embarques[embarques['Desc Canal'] != 'VENDA INTERNA']

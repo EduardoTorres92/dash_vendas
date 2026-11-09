@@ -48,18 +48,18 @@ ui.aplicar_tema()
 # Arquivos enviados pela tela inicial (dados reais, só em memória) ou demonstração.
 import fonte_dados
 
-COLUNAS_ESFT0100 = (
+COLUNAS_RELATORIO = (
     etl_faturamento.COLUNAS_FATURAMENTO
     + etl_faturamento.COLUNAS_DEVOLUCAO
     + etl_devolucao.COLUNAS_DEVOLUCAO
 )
-FONTE = fonte_dados.obter_fonte(COLUNAS_ESFT0100)
+FONTE = fonte_dados.obter_fonte(COLUNAS_RELATORIO)
 
 
 @st.cache_data(max_entries=1, show_spinner="Lendo o relatório de faturamento...")
 def ler_dados_brutos(chave, _conteudo):
     """Lê o CSV enviado uma vez por conteúdo (`chave`); o conteúdo não entra no hash."""
-    return fonte_dados.ler_esft0100(_conteudo, COLUNAS_ESFT0100)
+    return fonte_dados.ler_relatorio_faturamento(_conteudo, COLUNAS_RELATORIO)
 
 
 def dados_brutos():
@@ -85,8 +85,9 @@ faturado, df_devolucao_card, cores_marca = carregar_dados_com_cache(FONTE.chave,
 
 if faturado.empty:
     st.error(
-        "Nenhum registro de faturamento válido foi encontrado no arquivo. Confira se é o relatório "
-        "ESFT0100 completo (séries 3 e 12, tipos de operação de receita, bonificação ou transferência)."
+        "Nenhum registro de faturamento válido foi encontrado no arquivo. Confira se é o relatório de "
+        "faturamento completo e se as séries, depósitos e tipos de operação em config_local.py "
+        "correspondem aos do seu ERP."
     )
     if st.button("Trocar dados"):
         fonte_dados.trocar_dados()
@@ -94,7 +95,8 @@ if faturado.empty:
     st.stop()
 
 # Filtrar marcas indesejadas que podem ter passado pelo processamento
-marcas_indesejadas_finais = ['?', 'MTK CD SP']
+import configuracao as cfg
+marcas_indesejadas_finais = cfg.MARCAS_EXCLUIDAS
 if 'Marca' in faturado.columns:
     faturado = faturado[~faturado['Marca'].isin(marcas_indesejadas_finais)]
 if 'Marca' in df_devolucao_card.columns and len(df_devolucao_card) > 0:
@@ -223,7 +225,7 @@ if 'Dt Emis NF' in faturado.columns and len(faturado) > 0:
                 "Tipo de receita",
                 options=["Ambas", "Sim", "Não"],
                 index=0,  # "Ambas" como padrão
-                help="Sim = Receitas normais (1-Receita, 20-Receita Revenda) | Não = Brindes/Transferências (9-Brindes, 15-Transferencia) | Ambas = Todos os tipos"
+                help="Sim = receita direta e revenda | Não = bonificações e transferências | Ambas = todos os tipos"
             )
 
         # Aplicar filtro conforme o tipo selecionado
@@ -281,10 +283,10 @@ if 'Dt Emis NF' in faturado.columns and len(faturado) > 0:
         
         # Aplicar filtro de Receita globalmente usando as funções específicas do ETL
         if filtro_receita == "Sim":
-            # Apenas receitas normais (Receita Sim): "1 - Receita", "20 - Receita Revenda"
+            # Apenas receitas normais (Receita Sim): receita direta e revenda
             faturado = etl_faturamento.filtrar_receita_sim(faturado)
         elif filtro_receita == "Não":
-            # Apenas brindes e transferências (Receita Não): "9 - Brindes / Bonificações", "15 - Transferencia"
+            # Apenas bonificações e transferências (Receita Não)
             faturado = etl_faturamento.filtrar_receita_nao(faturado)
         # Se filtro_receita == "Ambas", não aplica filtro adicional
                 

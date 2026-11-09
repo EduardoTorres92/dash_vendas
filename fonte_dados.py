@@ -1,14 +1,14 @@
 """
 Fonte de dados do dashboard: arquivos enviados pela tela ou demonstração.
 
-Uso local: o relatório de faturamento (ESFT0100, .csv) e, opcionalmente, a
+Uso local: o relatório de faturamento (.csv) e, opcionalmente, a
 planilha de embarques (.xlsx) são enviados pela tela inicial. Os arquivos
 ficam só na memória do processo do Streamlit, neste computador: nada é
 gravado em disco nem enviado para fora, e ao fechar o app é preciso
 carregá-los de novo.
 
 Sem arquivos, o modo demonstração usa os dados fictícios do repositório
-(ESFT0100_processado.csv e embarques_falsos.xlsx).
+(pasta dados_demo/).
 """
 
 from __future__ import annotations
@@ -70,10 +70,10 @@ def _hash(*partes: Optional[bytes]) -> str:
     return h.hexdigest()[:16]
 
 
-def ler_esft0100(conteudo: bytes, colunas: Iterable[str]) -> pd.DataFrame:
+def ler_relatorio_faturamento(conteudo: bytes, colunas: Iterable[str]) -> pd.DataFrame:
     """
-    Lê o relatório ESFT0100 no formato original do ERP (CSV separado por ";",
-    codificação latin1) e devolve só as colunas usadas pelo dashboard.
+    Lê o relatório de faturamento no formato original do ERP (CSV separado por
+    ";", codificação latin1) e devolve só as colunas usadas pelo dashboard.
     """
     colunas = list(dict.fromkeys(colunas))
     try:
@@ -84,13 +84,13 @@ def ler_esft0100(conteudo: bytes, colunas: Iterable[str]) -> pd.DataFrame:
     encontradas = [str(c) for c in cabecalho.columns]
     if len(encontradas) < TAMANHO_MINIMO_COLUNAS:
         raise ArquivoInvalido(
-            "O arquivo não parece ser o relatório ESFT0100: as colunas devem ser separadas por "
+            "O arquivo não parece ser o relatório de faturamento: as colunas devem ser separadas por "
             "ponto e vírgula (;). Exporte o relatório do ERP novamente em CSV."
         )
     faltando = [c for c in colunas if c not in encontradas]
     if faltando:
         raise ArquivoInvalido(
-            "O arquivo não tem todas as colunas do relatório ESFT0100. Faltando: "
+            "O arquivo não tem todas as colunas do relatório de faturamento. Faltando: "
             + ", ".join(faltando)
         )
 
@@ -104,15 +104,16 @@ def ler_esft0100(conteudo: bytes, colunas: Iterable[str]) -> pd.DataFrame:
     )
 
 
-def validar_embarques(conteudo: bytes, aba: str = "BASE ESGR0050 POTENCIAL") -> None:
+def validar_embarques(conteudo: bytes) -> None:
+    """Confere se a planilha abre e tem uma aba com as colunas de embarques."""
+    from ETL_embarques import encontrar_aba_embarques
+
     try:
-        abas = pd.ExcelFile(io.BytesIO(conteudo)).sheet_names
+        encontrar_aba_embarques(io.BytesIO(conteudo))
+    except ValueError as erro:
+        raise ArquivoInvalido(str(erro)) from erro
     except Exception as erro:
         raise ArquivoInvalido(f"Não foi possível abrir a planilha de embarques ({erro}).") from erro
-    if aba not in abas:
-        raise ArquivoInvalido(
-            f'A planilha de embarques precisa ter a aba "{aba}". Abas encontradas: {", ".join(abas)}'
-        )
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +155,7 @@ def _tela_carregamento(colunas_csv: list[str]) -> None:
     col_csv, col_xlsx = st.columns(2)
     with col_csv:
         csv = st.file_uploader(
-            "Relatório de faturamento (ESFT0100, .csv)",
+            "Relatório de faturamento (.csv)",
             type=["csv"],
             help='Exportação do ERP com colunas separadas por ";". Obrigatório.',
         )
@@ -162,7 +163,7 @@ def _tela_carregamento(colunas_csv: list[str]) -> None:
         xlsx = st.file_uploader(
             "Planilha de embarques (.xlsx) — opcional",
             type=["xlsx"],
-            help='Usada na análise de Potencial x Faturamento (aba "BASE ESGR0050 POTENCIAL").',
+            help="Usada na análise de Potencial x Faturamento. A aba com as colunas de embarques é encontrada automaticamente.",
         )
 
     abrir = st.button("Abrir painel", type="primary", disabled=csv is None)
@@ -179,7 +180,7 @@ def _tela_carregamento(colunas_csv: list[str]) -> None:
         conteudo_xlsx = xlsx.getvalue() if xlsx is not None else None
         try:
             with st.spinner("Conferindo os arquivos..."):
-                ler_esft0100(conteudo_csv, colunas_csv)  # valida antes de abrir o painel
+                ler_relatorio_faturamento(conteudo_csv, colunas_csv)  # valida antes de abrir o painel
                 if conteudo_xlsx is not None:
                     validar_embarques(conteudo_xlsx)
         except ArquivoInvalido as erro:

@@ -15,6 +15,8 @@ import sys
 from faker import Faker
 import hashlib
 
+import configuracao as cfg
+
 # Inicializar Faker e dicionários de cache globais
 _faker = Faker('pt_BR')
 _cache_item = {}
@@ -212,15 +214,15 @@ def carregar_dados_devolucao(df_bruto=None, anonimizar=True):
     """
     Carrega e processa os dados de devolução.
 
-    Com `df_bruto` (ESFT0100 no formato original, por exemplo o arquivo
-    enviado pela tela do dashboard), processa esses dados; sem ele, lê o
-    ESFT0100.csv da pasta do projeto.
+    Com `df_bruto` (relatório de faturamento no formato original, por exemplo
+    o arquivo enviado pela tela do dashboard), processa esses dados; sem ele,
+    lê o relatório real deixado na pasta (cfg.ARQUIVO_FATURAMENTO).
     Retorna DataFrame com dados de devolução processados.
     """
     try:
         # Obter caminho do arquivo de devolução
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        caminho_devolucao = os.path.join(current_dir, 'ESFT0100.csv')
+        caminho_devolucao = os.path.join(current_dir, cfg.ARQUIVO_FATURAMENTO)
         
         print(f"DEBUG ETL_devolucao: Tentando carregar arquivo de: {caminho_devolucao}")
         print(f"DEBUG ETL_devolucao: Arquivo existe? {os.path.exists(caminho_devolucao)}")
@@ -259,10 +261,7 @@ def processar_dados_devolucao(df_devolucao, anonimizar=True):
     
     # Categorizar Tipo Oper antes de filtrar
     print(f"DEBUG: Tipos de operação únicos antes da categorização: {df_devolucao['Tipo Oper'].unique()}")
-    mapeamento_tipo_oper = {
-        '5 - Dev Venda': 'DEVOLUÇÃO',
-        '21 - Dev Compra': 'DEVOLUÇÃO',
-    }
+    mapeamento_tipo_oper = {codigo: 'DEVOLUÇÃO' for codigo in cfg.TIPOS_OPERACAO_DEVOLUCAO}
     df_devolucao['Tipo Oper'] = df_devolucao['Tipo Oper'].replace(mapeamento_tipo_oper)
     print(f"DEBUG: Tipos de operação únicos após categorização: {df_devolucao['Tipo Oper'].unique()}")
     
@@ -272,7 +271,7 @@ def processar_dados_devolucao(df_devolucao, anonimizar=True):
     # Limpar dados
     df_devolucao['Vl Net Livro'] = df_devolucao['Vl Net Livro'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
     df_devolucao['Vl Net Livro'] = df_devolucao['Vl Net Livro'].abs()
-    df_devolucao = df_devolucao[df_devolucao["Marca"] != "?"]
+    df_devolucao = df_devolucao[~df_devolucao["Marca"].isin(cfg.MARCAS_EXCLUIDAS)]
 
 
     df_devolucao['Quantidade'] = df_devolucao['Quantidade'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
@@ -282,7 +281,7 @@ def processar_dados_devolucao(df_devolucao, anonimizar=True):
     # Processar coluna Deposito se existir
     if 'Deposito' in df_devolucao.columns:
         df_devolucao['Deposito'] = df_devolucao['Deposito'].str.upper()
-        df_devolucao = df_devolucao[df_devolucao['Deposito'].isin(['CD', 'CI', 'DPA', 'DEV', 'MTK', 'APA'])]
+        df_devolucao = df_devolucao[df_devolucao['Deposito'].isin(cfg.DEPOSITOS_DEVOLUCAO)]
     
     # Converter data no formato brasileiro (DD/MM/YY)
     df_devolucao['Dt Emis NF'] = pd.to_datetime(df_devolucao['Dt Emis NF'], format='%d/%m/%y', errors='coerce')
@@ -291,55 +290,14 @@ def processar_dados_devolucao(df_devolucao, anonimizar=True):
     if 'Canal Venda Cliente' in df_devolucao.columns:
         df_devolucao['Canal Venda Cliente'] = df_devolucao['Canal Venda Cliente'].fillna('N/A')
         
-        # Mapeamento de canais específicos para categorias mais amplas
-        mapeamento_canais = {
-            # B2B ATACADO
-            'ATACADISTA': 'B2B ATACADO',
-            'DISTRIBUIDOR': 'B2B ATACADO',
-            'DISTRIBUIDOR VAR': 'B2B ATACADO',
-            
-            # B2B VAREJO
-            'FERRAGISTA': 'B2B VAREJO',
-            'MATERIAL DE CONSTRUCAO': 'B2B VAREJO',
-            'HOME CENTER': 'B2B VAREJO',
-            'CHAVEIRO': 'B2B VAREJO',
-            'VAREJO VIP': 'B2B VAREJO',
-            
-            # B2B PROFISSIONAL
-            'INTEGRADOR': 'B2B PROFISSIONAL',
-            'INTEGRADOR VAR': 'B2B PROFISSIONAL',
-            'INSTALADOR': 'B2B PROFISSIONAL',
-            'CONSTRUTORA': 'B2B PROFISSIONAL',
-            'SEGURANCA ELETRONICA': 'B2B PROFISSIONAL',
-            'PROTECAO A INCENDIO': 'B2B PROFISSIONAL',
-            
-            # B2C
-            'CONSUMIDOR FINAL PJ': 'B2C',
-            'CONSUMIDOR FINAL PF': 'B2C',
-            'PESSOA FISICA': 'B2C',
-            'CLIENTE FINAL': 'B2C',
-            
-            # E-COMMERCE
-            'WEBSHOP': 'E-COMMERCE',
-            
-            # OEM
-            'OEM': 'OEM',
-            'VENDA DIRETA': 'OEM',
-            
-            # INTERCOMPANY
-            'INTERCOMPANY/BRZ': 'VENDA INTERNA',
-            
-            # NOVOS CANAIS
-            'NOVOS CANAIS': 'NOVOS CANAIS',
-        }
+        # Mapeamento de canais: configuracao.MAPEAMENTO_CANAIS
         
         # Aplicar mapeamento
-        df_devolucao['Canal Venda Cliente'] = df_devolucao['Canal Venda Cliente'].replace(mapeamento_canais)
+        df_devolucao['Canal Venda Cliente'] = df_devolucao['Canal Venda Cliente'].replace(cfg.MAPEAMENTO_CANAIS)
 
     # Filtrar marcas indesejadas (as unidades já estão padronizadas no arquivo processado)
     if "Marca" in df_devolucao.columns:
-        indesejadas = {"?", "MTK CD SP"}
-        df_devolucao = df_devolucao[~df_devolucao["Marca"].isin(indesejadas)]
+        df_devolucao = df_devolucao[~df_devolucao["Marca"].isin(cfg.MARCAS_EXCLUIDAS)]
     
 
     # Preencher valores nulos

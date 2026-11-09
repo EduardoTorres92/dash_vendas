@@ -17,6 +17,7 @@ Direção visual gerada com a skill UI/UX Pro Max
 import functools
 from html import escape
 
+import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 import streamlit as st
@@ -529,3 +530,113 @@ def progresso_card_html(rotulo, percentual):
       </div>
     </div>
     """
+
+
+# ---------------------------------------------------------------------------
+# Tabelas (padrão brasileiro: R$ 1.234,56 · 12,5% · 1.234)
+# ---------------------------------------------------------------------------
+# Limite de células para formatar via Styler; acima disso usa column_config
+# (o Styler fica lento em tabelas muito grandes).
+LIMITE_CELULAS_STYLER = 200_000
+
+_PALAVRAS_MOEDA = ("valor", "vl ", "vl_", "faturamento", "faturado", "ticket", "potencial",
+                   "receita", "diferença", "diferenca", "r$", "preço", "preco", "custo")
+_PALAVRAS_PERCENTUAL = ("%", "percent", "índice", "indice")
+_PALAVRAS_QUANTIDADE = ("qtd", "qtde", "quant", "nfs", "itens", "skus", "registros",
+                        "embarques", "acumulad", "marcas únicas", "total")
+
+
+def _numero_br(valor, casas):
+    texto = f"{valor:,.{casas}f}"
+    return texto.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def formatar_moeda(valor):
+    if pd.isna(valor):
+        return "–"
+    return f"R$ {_numero_br(valor, 2)}"
+
+
+def formatar_numero(valor, casas=0):
+    if pd.isna(valor):
+        return "–"
+    return _numero_br(valor, casas)
+
+
+def formatar_percentual(valor, casas=1):
+    """`valor` na escala 0–100 (ex.: 54.8 -> '54,8%')."""
+    if pd.isna(valor):
+        return "–"
+    return f"{_numero_br(valor, casas)}%"
+
+
+def _classificar_coluna(nome, serie):
+    """Infere o formato de uma coluna numérica pelo nome."""
+    nome_min = str(nome).lower()
+    if pd.api.types.is_bool_dtype(serie) or not pd.api.types.is_numeric_dtype(serie):
+        return None
+    if any(p in nome_min for p in _PALAVRAS_PERCENTUAL):
+        return "percentual"
+    if any(p in nome_min for p in _PALAVRAS_MOEDA):
+        return "moeda"
+    if pd.api.types.is_float_dtype(serie) and not (serie.dropna() % 1 == 0).all():
+        return "decimal"
+    if any(p in nome_min for p in _PALAVRAS_QUANTIDADE):
+        return "inteiro"
+    # Códigos (NF, SKU, série, dia...) ficam como estão, sem separador de milhar
+    return None
+
+
+def _formatos(df, moeda, inteiro, percentual, decimal, texto):
+    explicitos = {}
+    for tipo, colunas in (("moeda", moeda), ("inteiro", inteiro),
+                          ("percentual", percentual), ("decimal", decimal), ("texto", texto)):
+        for c in colunas or ():
+            explicitos[c] = tipo
+    formatos = {}
+    for coluna in df.columns:
+        tipo = explicitos.get(coluna) or _classificar_coluna(coluna, df[coluna])
+        if tipo and tipo != "texto":
+            formatos[coluna] = tipo
+    return formatos
+
+
+def tabela(df, moeda=None, inteiro=None, percentual=None, decimal=None, texto=None,
+           casas_percentual=1, casas_decimal=2, **kwargs):
+    """
+    Exibe um DataFrame com números no padrão brasileiro, mantendo os valores
+    numéricos por baixo (a ordenação por coluna continua numérica).
+
+    As colunas são inferidas pelo nome (valor/faturamento/ticket -> moeda,
+    %/percentual/índice -> percentual, qtd/nfs/itens -> inteiro); passe as
+    listas `moeda`, `inteiro`, `percentual`, `decimal` ou `texto` para forçar.
+    Percentuais devem estar na escala 0–100. Demais kwargs vão para st.dataframe.
+    """
+    kwargs.setdefault("use_container_width", True)
+    df = df.copy()
+
+    # Datas sem horário; vazios em colunas de texto como "–"
+    for coluna in df.columns:
+        if pd.api.types.is_datetime64_any_dtype(df[coluna]):
+            df[coluna] = df[coluna].dt.strftime("%d/%m/%Y")
+        if not pd.api.types.is_numeric_dtype(df[coluna]):
+            df[coluna] = df[coluna].astype(object).where(df[coluna].notna(), "–")
+
+    formatos = _formatos(df, moeda, inteiro, percentual, decimal, texto)
+
+    if df.size > LIMITE_CELULAS_STYLER:
+        config = dict(kwargs.pop("column_config", None) or {})
+        mapa = {"moeda": "localized", "inteiro": "localized",
+                "percentual": f"%.{casas_percentual}f%%", "decimal": "localized"}
+        for coluna, tipo in formatos.items():
+            config.setdefault(coluna, st.column_config.NumberColumn(str(coluna), format=mapa[tipo]))
+        return st.dataframe(df, column_config=config, **kwargs)
+
+    funcoes = {
+        "moeda": formatar_moeda,
+        "inteiro": formatar_numero,
+        "percentual": lambda v: formatar_percentual(v, casas_percentual),
+        "decimal": lambda v: formatar_numero(v, casas_decimal),
+    }
+    estilo = df.style.format({c: funcoes[t] for c, t in formatos.items()}, na_rep="–")
+    return st.dataframe(estilo, **kwargs)

@@ -519,23 +519,15 @@ with tab_unidade_negocio:
     analise_unidade_negocio = etl_faturamento.analisar_faturamento_por_unidade_negocio(faturado)
 
     # Formatar valores para exibição
-    analise_unidade_negocio['VALOR_NET_Formatado'] = analise_unidade_negocio['VALOR_NET'].apply(
-        lambda x: formatar_valor_seguro(x, "currency")
-    )
-    analise_unidade_negocio['Ticket_Medio_Formatado'] = analise_unidade_negocio['Ticket_Medio'].apply(
-        lambda x: formatar_valor_seguro(x, "currency")
-    )
+
+
 
     # Criar DataFrame para exibição com colunas formatadas
-    df_exibicao = analise_unidade_negocio[['Unidade_de_Negocio', 'VALOR_NET_Formatado', 'QTD_NFs', 'Ticket_Medio_Formatado']].copy()
+    df_exibicao = analise_unidade_negocio[['Unidade_de_Negocio', 'VALOR_NET', 'QTD_NFs', 'Ticket_Medio']].copy()
     df_exibicao.columns = ['Unidade de Negócio', 'VALOR NET', 'QTD. NFs', 'Ticket médio']
 
     # Exibir tabela formatada
-    st.dataframe(
-        df_exibicao,
-        use_container_width=True,
-        hide_index=True
-    )
+    ui.tabela(df_exibicao, hide_index=True)
 
 with tab_canal_venda:
     # Análise por Canal de Venda por Marca
@@ -555,23 +547,15 @@ with tab_canal_venda:
         for idx, (marca, df_marca) in enumerate(analise_canal_por_marca.items()):
             with tabs[idx]:
                 # Formatar valores para exibição
-                df_marca['VALOR_NET_Formatado'] = df_marca['VALOR_NET'].apply(
-                    lambda x: formatar_valor_seguro(x, "currency")
-                )
-                df_marca['Ticket_Medio_Formatado'] = df_marca['Ticket_Medio'].apply(
-                    lambda x: formatar_valor_seguro(x, "currency")
-                )
+
+
                 
                 # Criar DataFrame para exibição com colunas formatadas que corresponde à imagem
-                df_exibicao = df_marca[['Unidade_Negocio', 'VALOR_NET_Formatado', 'QTD_NFs', 'Ticket_Medio_Formatado']].copy()
+                df_exibicao = df_marca[['Unidade_Negocio', 'VALOR_NET', 'QTD_NFs', 'Ticket_Medio']].copy()
                 df_exibicao.columns = ['Unidade de Negócio', 'VALOR NET', 'QTD. NFs', 'Ticket médio']
                 
                 # Exibir tabela formatada
-                st.dataframe(
-                    df_exibicao,
-                    use_container_width=True,
-                    hide_index=True
-                )
+                ui.tabela(df_exibicao, hide_index=True)
 with tab_ontem:
     # RELATÓRIO DO DIA ANTERIOR POR MARCA
     titulo_ontem = formatar_titulo_marcas("Relatório do Dia Anterior por Marca", marcas_selecionadas, marcas_disponiveis)
@@ -648,18 +632,10 @@ with tab_ontem:
                         relatorio_formatado = relatorio_completo.copy()
                         
                         # Formatar valores
-                        relatorio_formatado['Receita Sim'] = relatorio_formatado['Receita Sim'].apply(
-                            lambda x: formatar_valor_seguro(x, "currency")
-                        )
-                        relatorio_formatado['Receita Não'] = relatorio_formatado['Receita Não'].apply(
-                            lambda x: formatar_valor_seguro(x, "currency")
-                        )
-                        relatorio_formatado['QTD. NFs'] = relatorio_formatado['QTD. NFs'].apply(
-                            lambda x: formatar_valor_seguro(x, "number")
-                        )
-                        relatorio_formatado['QTD. NFs (NÃO)'] = relatorio_formatado['QTD. NFs (NÃO)'].apply(
-                            lambda x: formatar_valor_seguro(x, "number")
-                        )
+
+
+
+
                         
                         # Adicionar linha de total usando as funções específicas do ETL
                         df_receita_sim = etl_faturamento.filtrar_receita_sim(faturado_dia_anterior)
@@ -673,31 +649,23 @@ with tab_ontem:
                         
                         linha_total = pd.DataFrame({
                             'Marca': ['TOTAL'],
-                            'Receita Sim': [formatar_valor_seguro(total_receita_sim, "currency")],
-                            'QTD. NFs': [formatar_valor_seguro(total_nfs_sim, "number")],
-                            'Receita Não': [formatar_valor_seguro(total_receita_nao, "currency")],
-                            'QTD. NFs (NÃO)': [formatar_valor_seguro(total_nfs_nao, "number")]
+                            'Receita Sim': [total_receita_sim],
+                            'QTD. NFs': [total_nfs_sim],
+                            'Receita Não': [total_receita_nao],
+                            'QTD. NFs (NÃO)': [total_nfs_nao]
                         })
                         
                         # Combinar dados com linha de total
                         relatorio_final = pd.concat([relatorio_formatado, linha_total], ignore_index=True)
                         
                         # Exibir tabela formatada
-                        st.dataframe(
-                            relatorio_final,
-                            use_container_width=True,
-                            hide_index=True
-                        )
+                        ui.tabela(relatorio_final, hide_index=True)
                     else:
                         st.info("ℹ Nenhum dado de receita encontrado para o dia anterior")
                     
                 else:
                     # Fallback para estrutura original se não houver coluna Tipo Oper
-                    st.dataframe(
-                        relatorio_dia_anterior,
-                        use_container_width=True,
-                        hide_index=True
-                    )
+                    ui.tabela(relatorio_dia_anterior, hide_index=True)
             
             with tab_canal_venda:
                 st.subheader("Análise por Canal de Venda")
@@ -720,28 +688,14 @@ with tab_ontem:
                     relatorio_canal_venda = relatorio_canal_venda.sort_values('Valor Total', ascending=False)
                     
                     # Formatar valores
-                    relatorio_canal_venda['Qtd Itens'] = relatorio_canal_venda['Qtd Itens'].apply(
-                        lambda x: formatar_valor_seguro(x, "number")
-                    )
-                    relatorio_canal_venda['Valor Total'] = relatorio_canal_venda['Valor Total'].apply(
-                        lambda x: formatar_valor_seguro(x, "currency")
-                    )
-                    relatorio_canal_venda['SKUs Únicos'] = relatorio_canal_venda['SKUs Únicos'].apply(
-                        lambda x: formatar_valor_seguro(x, "number")
-                    )
-                    relatorio_canal_venda['NFs Únicas'] = relatorio_canal_venda['NFs Únicas'].apply(
-                        lambda x: formatar_valor_seguro(x, "number")
-                    )
-                    relatorio_canal_venda['Marcas Únicas'] = relatorio_canal_venda['Marcas Únicas'].apply(
-                        lambda x: formatar_valor_seguro(x, "number")
-                    )
+
+
+
+
+
                     
                     # Exibir tabela de canal de venda
-                    st.dataframe(
-                        relatorio_canal_venda,
-                        use_container_width=True,
-                        hide_index=True
-                    )
+                    ui.tabela(relatorio_canal_venda, hide_index=True)
                     
                     # Análise detalhada por marca e canal de venda
                     st.subheader("Detalhamento por Marca e Canal de Venda")
@@ -761,25 +715,13 @@ with tab_ontem:
                     relatorio_marca_canal = relatorio_marca_canal.sort_values(['Marca', 'Valor Total'], ascending=[True, False])
                     
                     # Formatar valores
-                    relatorio_marca_canal['Qtd Itens'] = relatorio_marca_canal['Qtd Itens'].apply(
-                        lambda x: formatar_valor_seguro(x, "number")
-                    )
-                    relatorio_marca_canal['Valor Total'] = relatorio_marca_canal['Valor Total'].apply(
-                        lambda x: formatar_valor_seguro(x, "currency")
-                    )
-                    relatorio_marca_canal['SKUs Únicos'] = relatorio_marca_canal['SKUs Únicos'].apply(
-                        lambda x: formatar_valor_seguro(x, "number")
-                    )
-                    relatorio_marca_canal['NFs Únicas'] = relatorio_marca_canal['NFs Únicas'].apply(
-                        lambda x: formatar_valor_seguro(x, "number")
-                    )
+
+
+
+
                     
                     # Exibir tabela detalhada
-                    st.dataframe(
-                        relatorio_marca_canal,
-                        use_container_width=True,
-                        hide_index=True
-                    )
+                    ui.tabela(relatorio_marca_canal, hide_index=True)
                     
                     # Gráfico de barras por canal de venda
                     st.subheader("Gráfico por Canal de Venda")
@@ -1140,34 +1082,23 @@ with tab_potencial:
             
             # Formatar valores monetários
             colunas_monetarias = ['POTENCIAL', 'TICKET MÉDIO EMBARQUE', 'FATURADO PERÍODO', 'RECEITA NÃO', 'DIFERENÇA PREV. X FATURAD']
-            for col in colunas_monetarias:
-                df_detalhado[col] = df_detalhado[col].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if x != 0 else "R$ -")
+
             
             # Formatar percentual
-            df_detalhado['PERCENTUAL'] = df_detalhado['PERCENTUAL'].apply(lambda x: f"{x:.0f}%" if x > 0 else "0%")
+
             
             # Formatar quantidades
             colunas_quantidade = ['QTD. EMBARQUES DISPONÍVEIS', 'QTD. NFs', 'QTD. NFs (NÃO)']
-            for col in colunas_quantidade:
-                df_detalhado[col] = df_detalhado[col].apply(lambda x: f"{x:.0f}" if x > 0 else "0")
+
             
             # Exibir DataFrame com formatação
-            st.dataframe(
+            ui.tabela(
                 df_detalhado,
-                use_container_width=True,
+                moeda=colunas_monetarias,
+                inteiro=colunas_quantidade,
+                percentual=['PERCENTUAL'],
+                casas_percentual=0,
                 hide_index=True,
-                column_config={
-                    "UNIDADE DE NEGÓCIO": st.column_config.TextColumn("UNIDADE DE NEGÓCIO", width="medium"),
-                    "POTENCIAL": st.column_config.TextColumn("POTENCIAL", width="medium"),
-                    "QTD. EMBARQUES DISPONÍVEIS": st.column_config.TextColumn("QTD. EMBARQUES DISPONÍVEIS", width="medium"),
-                    "TICKET MÉDIO EMBARQUE": st.column_config.TextColumn("TICKET MÉDIO EMBARQUE", width="medium"),
-                    "FATURADO PERÍODO": st.column_config.TextColumn("FATURADO PERÍODO", width="medium"),
-                    "QTD. NFs": st.column_config.TextColumn("QTD. NFs", width="medium"),
-                    "RECEITA NÃO": st.column_config.TextColumn("RECEITA NÃO", width="medium"),
-                    "QTD. NFs (NÃO)": st.column_config.TextColumn("QTD. NFs (NÃO)", width="medium"),
-                    "DIFERENÇA PREV. X FATURAD": st.column_config.TextColumn("DIFERENÇA PREV. X FATURAD", width="medium"),
-                    "PERCENTUAL": st.column_config.TextColumn("PERCENTUAL", width="medium")
-                }
             )
             
         else:
@@ -1251,14 +1182,10 @@ if 'Dt Emis NF' in faturado_completo.columns and len(faturado_completo) > 0:
         
         # Formatar valores para exibição
         faturamento_mensal_formatado = faturamento_mensal.copy()
-        faturamento_mensal_formatado['Valor Total'] = faturamento_mensal_formatado['Valor Total'].apply(
-            lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        )
-        faturamento_mensal_formatado['Quantidade Total'] = faturamento_mensal_formatado['Quantidade Total'].apply(
-            lambda x: f"{x:,.0f}".replace(",", ".")
-        )
+
+
         
-        st.dataframe(faturamento_mensal_formatado, use_container_width=True, hide_index=True)
+        ui.tabela(faturamento_mensal_formatado, hide_index=True)
         
     with tab_por_unidade:
         st.subheader("Faturamento por Unidade e Mês")
@@ -1320,11 +1247,7 @@ if 'Dt Emis NF' in faturado_completo.columns and len(faturado_completo) > 0:
         tabela_pivot['Total'] = tabela_pivot.sum(axis=1)
         
         # Formatar valores
-        tabela_pivot_formatada = tabela_pivot.map(
-            lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".") if x != 0 else "R$ 0,00"
-        )
-        
-        st.dataframe(tabela_pivot_formatada, use_container_width=True)
+        ui.tabela(tabela_pivot, moeda=list(tabela_pivot.columns))
 else:
     st.warning("Dados de data não disponíveis para análise mensal")
 
@@ -1454,26 +1377,16 @@ with tab_estado:
                 # Mostrar tabela de resumo por estado
                 st.subheader("Resumo por Estado")
                 
-                # Formatar valores para exibição
-                estados_consolidados['Valor Total Formatado'] = estados_consolidados['Valor Total'].apply(
-                    lambda x: formatar_valor_seguro(x, "currency")
-                )
-                estados_consolidados['Qtd NFs Formatado'] = estados_consolidados['Qtd NFs'].apply(
-                    lambda x: formatar_valor_seguro(x, "number")
-                )
-                estados_consolidados['Qtd Total Formatado'] = estados_consolidados['Qtd Total'].apply(
-                    lambda x: formatar_valor_seguro(x, "number")
-                )
                 
                 # Calcular percentual do total
                 total_faturamento_estados = estados_consolidados['Valor Total'].sum()
                 estados_consolidados['Percentual'] = (estados_consolidados['Valor Total'] / total_faturamento_estados * 100).round(2)
                 
                 # Preparar dados para exibição
-                df_exibicao_estados = estados_consolidados[['Estado', 'Valor Total Formatado', 'Qtd NFs Formatado', 'Qtd Total Formatado', 'Percentual']].copy()
+                df_exibicao_estados = estados_consolidados[['Estado', 'Valor Total', 'Qtd NFs', 'Qtd Total', 'Percentual']].copy()
                 df_exibicao_estados.columns = ['Estado', 'Valor Total', 'Qtd NFs', 'Qtd Total', '% do Total']
                 
-                st.dataframe(df_exibicao_estados, use_container_width=True, hide_index=True)
+                ui.tabela(df_exibicao_estados, hide_index=True)
         else:
             st.warning("Não foi possível carregar o mapa. Verifique se o arquivo br_states.json está disponível.")
     else:
@@ -1506,13 +1419,6 @@ with tab_regiao:
     # Debug: Mostrar total para verificação
     st.info(f"**Total de Faturamento por Região:** {formatar_valor_seguro(total_faturamento, 'currency')}")
 
-    # Formatar valores
-    df_regiao['Faturamento_Formatado'] = df_regiao['Faturamento'].apply(
-        lambda x: formatar_valor_seguro(x, "currency")
-    )
-    df_regiao['Registros_Formatado'] = df_regiao['Registros'].apply(
-        lambda x: formatar_valor_seguro(x, "number")
-    )
 
     # Layout em duas colunas
     col_grafico, col_tabela = st.columns(2)
@@ -1545,10 +1451,10 @@ with tab_regiao:
         st.subheader("Resumo por Região")
         
         # Preparar dados para exibição
-        df_exibicao = df_regiao[['Região', 'Faturamento_Formatado', 'Registros_Formatado', 'Percentual']].copy()
+        df_exibicao = df_regiao[['Região', 'Faturamento', 'Registros', 'Percentual']].copy()
         df_exibicao.columns = ['Região', 'Faturamento', 'Qtd Registros', '% do Total']
         
-        st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
+        ui.tabela(df_exibicao, hide_index=True)
 
 
 
@@ -1705,7 +1611,7 @@ with tab_lead_time_2:
             tabela_d_mais_marca['Total'] = tabela_d_mais_marca.sum(axis=1)
             tabela_d_mais_marca.loc['Total'] = tabela_d_mais_marca.sum(axis=0)
             
-            st.dataframe(tabela_d_mais_marca, use_container_width=True)
+            ui.tabela(tabela_d_mais_marca, inteiro=list(tabela_d_mais_marca.columns))
             
         else:
             st.info("Nenhum dado disponível para distribuição por D+ e Marca.")
@@ -1782,7 +1688,7 @@ with tab_lead_time_3:
                 st.plotly_chart(fig_torta, use_container_width=True, key="percentual_torta_marca")
             
             with col_tabela:
-                st.dataframe(tabela_percentual, use_container_width=True)
+                ui.tabela(tabela_percentual, percentual=list(tabela_percentual.columns))
             
         else:
             st.info("Nenhum dado disponível para percentual por D+ e Marca.")
@@ -1856,7 +1762,7 @@ with tab_lead_time_4:
                 aggfunc='mean'
             ).round(2)
             
-            st.dataframe(tabela_diaria, use_container_width=True)
+            ui.tabela(tabela_diaria, decimal=list(tabela_diaria.columns))
 
 # ============================================================================
 # SEÇÃO DE DEVOLUÇÃO
@@ -1980,9 +1886,6 @@ if len(df_devolucao) > 0:
             # Preparar dados da tabela
             resumo_devolucao = metricas_devolucao['devolucao_por_marca'].reset_index()
             resumo_devolucao['Percentual'] = (resumo_devolucao['Vl Net Livro'] / resumo_devolucao['Vl Net Livro'].sum() * 100).round(1)
-            resumo_devolucao['Valor Formatado'] = resumo_devolucao['Vl Net Livro'].apply(
-                lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            )
             
             resumo_devolucao = resumo_devolucao[['Marca', 'Vl Net Livro', 'Percentual']]
             resumo_devolucao.columns = ['Marca', 'Valor (R$)', '% do Total']
@@ -1995,15 +1898,7 @@ if len(df_devolucao) > 0:
             
             with col2:
                 st.subheader("Resumo de Devoluções por Marca")
-                st.dataframe(
-                    resumo_devolucao,
-                    column_config={
-                        "Valor (R$)": st.column_config.TextColumn("Valor (R$)", width="medium"),
-                        "% do Total": st.column_config.NumberColumn("% do Total", format="%.1f%%")
-                    },
-                    hide_index=True,
-                    use_container_width=True
-                )
+                ui.tabela(resumo_devolucao, hide_index=True)
     
     with tab_dev2:
         # Evolução das Devoluções ao Longo do Tempo
@@ -2110,7 +2005,7 @@ if len(df_devolucao) > 0:
         else:
             df_devolucao_display = df_devolucao.copy()
         
-        st.dataframe(df_devolucao_display, use_container_width=True)
+        ui.tabela(df_devolucao_display, hide_index=True)
     
     with tab_dev4:
         # Top itens com maior índice de devolução por marca
@@ -2209,12 +2104,8 @@ if len(df_devolucao) > 0:
                                         with col2:
                                             # Preparar dados para exibição
                                             top_devolucao_display = top_devolucao.copy()
-                                            top_devolucao_display['Valor_Devolvido'] = top_devolucao_display['Vl Net Livro_x'].apply(
-                                                lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                                            )
-                                            top_devolucao_display['Valor_Faturado'] = top_devolucao_display['Vl Net Livro_y'].apply(
-                                                lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                                            )
+                                            top_devolucao_display['Valor_Devolvido'] = top_devolucao_display['Vl Net Livro_x']
+                                            top_devolucao_display['Valor_Faturado'] = top_devolucao_display['Vl Net Livro_y']
                                             
                                             # Selecionar colunas para exibição
                                             colunas_exibir = [
@@ -2229,16 +2120,13 @@ if len(df_devolucao) > 0:
                                             ]
                                             
                                             # Exibir tabela
-                                            st.dataframe(
+                                            ui.tabela(
                                                 top_devolucao_display,
-                                                column_config={
-                                                    "Índice Dev. (%)": st.column_config.NumberColumn("Índice Dev. (%)", format="%.2f%%"),
-                                                    "Índice Dev. Qtd (%)": st.column_config.NumberColumn("Índice Dev. Qtd (%)", format="%.2f%%"),
-                                                    "Qtd Devolvida": st.column_config.NumberColumn("Qtd Devolvida", format="%d"),
-                                                    "Qtd Faturada": st.column_config.NumberColumn("Qtd Faturada", format="%d")
-                                                },
+                                                moeda=['Valor Devolvido', 'Valor Faturado'],
+                                                percentual=['Índice Dev. (%)', 'Índice Dev. Qtd (%)'],
+                                                inteiro=['Qtd Devolvida', 'Qtd Faturada'],
+                                                casas_percentual=2,
                                                 hide_index=True,
-                                                use_container_width=True
                                             )
                                         
                                         # Métricas resumidas da marca
@@ -2361,10 +2249,7 @@ if not nfs_acumuladas_geral.empty:
         tabela_combinada.columns = ['Data', 'NFs do Dia', 'NFs Acumuladas']
         
         # Formatar valores
-        tabela_combinada['NFs do Dia'] = tabela_combinada['NFs do Dia'].apply(lambda x: formatar_valor_seguro(x, 'number'))
-        tabela_combinada['NFs Acumuladas'] = tabela_combinada['NFs Acumuladas'].apply(lambda x: formatar_valor_seguro(x, 'number'))
-        
-        st.dataframe(tabela_combinada, use_container_width=True, hide_index=True)
+        ui.tabela(tabela_combinada, inteiro=['NFs do Dia', 'NFs Acumuladas'], hide_index=True)
 
 # ============================================================================
 # CURVA ABC DE FATURAMENTO POR ITEM POR MARCA
@@ -2490,14 +2375,11 @@ with aba_curva_abc:
                 # Mostrar tabela de classificação ABC (apenas top 10 de cada classe) em expander
                 with st.expander(f"Top 10 Itens por Classe ABC - {marca}", expanded=False):
                     # Preparar dados para exibição (usando top_10_por_classe)
-                    df_abc_exibicao = top_10_por_classe[['Desc Item', 'Valor_Formatado', 'Percentual', 'Percentual_Acumulado', 'Classificacao_ABC']].copy()
+                    df_abc_exibicao = top_10_por_classe[['Desc Item', 'Vl Net Livro', 'Percentual', 'Percentual_Acumulado', 'Classificacao_ABC']].copy()
                     df_abc_exibicao.columns = ['Item', 'Faturamento', '% Individual', '% Acumulado', 'Classificação']
                     
                     # Formatar percentuais
-                    df_abc_exibicao['% Individual'] = df_abc_exibicao['% Individual'].apply(lambda x: f"{x:.1f}%")
-                    df_abc_exibicao['% Acumulado'] = df_abc_exibicao['% Acumulado'].apply(lambda x: f"{x:.1f}%")
-                    
-                    st.dataframe(df_abc_exibicao, use_container_width=True, hide_index=True)
+                    ui.tabela(df_abc_exibicao, hide_index=True)
                 
                 # Resumo por classificação ABC (top 10 de cada classe)
                 st.subheader(f"Resumo Top 10 por Classe ABC - {marca}")
@@ -2509,16 +2391,7 @@ with aba_curva_abc:
                 }).reset_index()
                 
                 resumo_abc_marca.columns = ['Classificação', 'Qtd Itens (Top 10)', 'Faturamento Total', '% do Total']
-                resumo_abc_marca['Faturamento Total Formatado'] = resumo_abc_marca['Faturamento Total'].apply(
-                    lambda x: formatar_valor_seguro(x, "currency")
-                )
-                resumo_abc_marca['% do Total'] = resumo_abc_marca['% do Total'].apply(lambda x: f"{x:.1f}%")
-                
-                # Exibir resumo
-                df_resumo_abc_marca = resumo_abc_marca[['Classificação', 'Qtd Itens (Top 10)', 'Faturamento Total Formatado', '% do Total']].copy()
-                df_resumo_abc_marca.columns = ['Classificação', 'Qtd Itens (Top 10)', 'Faturamento Total', '% do Total']
-                
-                st.dataframe(df_resumo_abc_marca, use_container_width=True, hide_index=True)
+                ui.tabela(resumo_abc_marca, hide_index=True)
                 
                 # Mostrar informações adicionais
                 total_itens_marca = len(faturamento_por_item)
@@ -2708,11 +2581,7 @@ with aba_top_itens:
         )
 
         # Formatar quantidade
-        df_top_10_com_desc["Quantidade Total"] = df_top_10_com_desc[
-            "Quantidade Total"
-        ].apply(lambda x: formatar_valor_seguro(x, "number"))
-
-        st.dataframe(df_top_10_com_desc, use_container_width=True)
+        ui.tabela(df_top_10_com_desc, inteiro=["Quantidade Total"], hide_index=True)
 
     with tab3:
         st.write("**SKU com maior quantidade faturada em cada marca**")
@@ -2737,11 +2606,7 @@ with aba_top_itens:
         )
 
         # Formatar quantidade
-        df_top_marca_com_desc["Quantidade"] = df_top_marca_com_desc["Quantidade"].apply(
-            lambda x: formatar_valor_seguro(x, "number")
-        )
-
-        st.dataframe(df_top_marca_com_desc, use_container_width=True)
+        ui.tabela(df_top_marca_com_desc, inteiro=["Quantidade"], hide_index=True)
     
 ui.secao("Busca avançada", "Pesquise notas fiscais por número, pedido do cliente ou razão social.")
 # Filtro de Canal de Venda
@@ -2791,6 +2656,6 @@ if busca_razao:
 if 'Nota Fiscal' in faturado_filtrado_can.columns:
     faturado_filtrado_can = faturado_filtrado_can.drop_duplicates(subset=['Nota Fiscal'])
 
-st.dataframe(faturado_filtrado_can, use_container_width=True)
+ui.tabela(faturado_filtrado_can, hide_index=True)
 
 

@@ -17,6 +17,7 @@ import hashlib
 import pickle
 
 import configuracao as cfg
+from conversoes import para_data, para_numero
 
 # Adicionar o diretório atual ao path para importar as funções de cut-off
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -356,19 +357,13 @@ def processar_dados_faturamento(df_faturamento, anonimizar=True):
     
     
     
-    df_faturamento['Vl Net Livro'] = (
-    df_faturamento['Vl Net Livro']
-    .astype(str)
-    .str.replace('.', '', regex=False)   # Remove separador de milhar, se houver
-    .str.replace(',', '.', regex=False)  # Troca vírgula decimal por ponto
-    )
-    df_faturamento['Vl Net Livro'] = pd.to_numeric(df_faturamento['Vl Net Livro'], errors='coerce')
+    df_faturamento['Vl Net Livro'] = para_numero(df_faturamento['Vl Net Livro'])
 
     # Remover registros onde Localização = 'EXPORTAÇÃO'
     
     # Converter data no formato brasileiro (DD/MM/YYYY)
-    df_faturamento['Dt Emis NF'] = pd.to_datetime(df_faturamento['Dt Emis NF'], format='%d/%m/%y', errors='coerce').dt.normalize()
-    df_faturamento['Dt Embarque'] = pd.to_datetime(df_faturamento['Dt Embarque'], format='%d/%m/%y', errors='coerce').dt.normalize()
+    df_faturamento['Dt Emis NF'] = para_data(df_faturamento['Dt Emis NF']).dt.normalize()
+    df_faturamento['Dt Embarque'] = para_data(df_faturamento['Dt Embarque']).dt.normalize()
 
     df_faturamento['Quantidade'] = pd.to_numeric(df_faturamento['Quantidade'], errors='coerce').abs()
     
@@ -1543,7 +1538,7 @@ def carregar_dados_devolucao(df_bruto=None, anonimizar=True):
     
     # Converter coluna de data
     if 'Dt Emis NF' in df_devolucao.columns:
-        df_devolucao['Dt Emis NF'] = pd.to_datetime(df_devolucao['Dt Emis NF'], format='%d/%m/%y', errors='coerce').dt.normalize()
+        df_devolucao['Dt Emis NF'] = para_data(df_devolucao['Dt Emis NF']).dt.normalize()
         df_devolucao = df_devolucao.dropna(subset=['Dt Emis NF'])
     
     return df_devolucao

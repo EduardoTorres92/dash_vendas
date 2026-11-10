@@ -13,6 +13,8 @@ address = "127.0.0.1"
 port = 8501
 # Tamanho máximo dos arquivos enviados pela tela (MB)
 maxUploadSize = 1024
+# Serve a pasta static/ (MapLibre e malha dos estados) para o mapa funcionar sem internet
+enableStaticServing = true
 
 [browser]
 serverAddress = "localhost"

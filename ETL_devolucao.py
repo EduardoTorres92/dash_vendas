@@ -16,6 +16,7 @@ from faker import Faker
 import hashlib
 
 import configuracao as cfg
+from conversoes import para_data, para_numero
 
 # Inicializar Faker e dicionários de cache globais
 _faker = Faker('pt_BR')
@@ -216,13 +217,17 @@ def carregar_dados_devolucao(df_bruto=None, anonimizar=True):
 
     Com `df_bruto` (relatório de faturamento no formato original, por exemplo
     o arquivo enviado pela tela do dashboard), processa esses dados; sem ele,
-    lê o relatório real deixado na pasta (cfg.ARQUIVO_FATURAMENTO).
+    usa o mesmo arquivo do faturamento: o de demonstração
+    (cfg.ARQUIVO_DEMO_FATURAMENTO) ou, se não existir, o relatório real deixado
+    na pasta (cfg.ARQUIVO_FATURAMENTO).
     Retorna DataFrame com dados de devolução processados.
     """
     try:
         # Obter caminho do arquivo de devolução
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        caminho_devolucao = os.path.join(current_dir, cfg.ARQUIVO_FATURAMENTO)
+        caminho_devolucao = os.path.join(current_dir, cfg.ARQUIVO_DEMO_FATURAMENTO)
+        if not os.path.exists(caminho_devolucao):
+            caminho_devolucao = os.path.join(current_dir, cfg.ARQUIVO_FATURAMENTO)
         
         print(f"DEBUG ETL_devolucao: Tentando carregar arquivo de: {caminho_devolucao}")
         print(f"DEBUG ETL_devolucao: Arquivo existe? {os.path.exists(caminho_devolucao)}")
@@ -269,12 +274,12 @@ def processar_dados_devolucao(df_devolucao, anonimizar=True):
     print(f"DEBUG: Registros após filtrar DEVOLUÇÃO: {len(df_devolucao)}")
     
     # Limpar dados
-    df_devolucao['Vl Net Livro'] = df_devolucao['Vl Net Livro'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
+    df_devolucao['Vl Net Livro'] = para_numero(df_devolucao['Vl Net Livro'])
     df_devolucao['Vl Net Livro'] = df_devolucao['Vl Net Livro'].abs()
     df_devolucao = df_devolucao[~df_devolucao["Marca"].isin(cfg.MARCAS_EXCLUIDAS)]
 
 
-    df_devolucao['Quantidade'] = df_devolucao['Quantidade'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
+    df_devolucao['Quantidade'] = para_numero(df_devolucao['Quantidade'])
     df_devolucao['Quantidade'] = df_devolucao['Quantidade'].abs()
     
     
@@ -284,7 +289,7 @@ def processar_dados_devolucao(df_devolucao, anonimizar=True):
         df_devolucao = df_devolucao[df_devolucao['Deposito'].isin(cfg.DEPOSITOS_DEVOLUCAO)]
     
     # Converter data no formato brasileiro (DD/MM/YY)
-    df_devolucao['Dt Emis NF'] = pd.to_datetime(df_devolucao['Dt Emis NF'], format='%d/%m/%y', errors='coerce')
+    df_devolucao['Dt Emis NF'] = para_data(df_devolucao['Dt Emis NF'])
 
     # Padronizar e categorizar canais de venda
     if 'Canal Venda Cliente' in df_devolucao.columns:

@@ -19,7 +19,7 @@ Este projeto oferece uma solução completa para análise de dados de faturament
 - **Análise Temporal**: Evolução mensal e comparativos período a período
 - **Análise por Unidade de Negócio**: Performance detalhada por marca/unidade
 - **Análise por Canal**: Distribuição por canais de venda (B2B, B2C, E-commerce, etc.)
-- **Análise Regional**: Faturamento por estado com mapa interativo do Brasil
+- **Análise Regional**: Faturamento por estado com mapa interativo do Brasil em 2D e 3D (MapLibre, funciona sem internet)
 - **Top Produtos**: Ranking dos produtos mais vendidos
 - **Top Clientes**: Ranking de clientes por faturamento
 
@@ -131,7 +131,9 @@ Projeto Dash/
 ├── ETL_devolucao.py            # ETL de devoluções
 ├── ETL_embarques.py            # ETL de embarques
 ├── cut_off_mensal.py           # Valores de cut-off por mês
-├── br_states.json              # Coordenadas dos estados brasileiros
+├── conversoes.py               # Leitura de datas e números do ERP (formato brasileiro)
+├── mapa_estados.py             # Mapa por estado (componente Streamlit com MapLibre)
+├── static/                     # MapLibre GL JS e malha dos estados, servidos localmente
 ├── requirements.txt            # Dependências do projeto
 ├── README.md                   # Este arquivo
 └── README_DADOS.md             # Fontes de dados, configuração e formato dos arquivos
@@ -142,7 +144,7 @@ Projeto Dash/
 ### Gráficos Interativos
 - 📊 **Gráficos de Barras**: Comparação de valores entre categorias
 - 📈 **Gráficos de Linha**: Evolução temporal de métricas
-- 🗺️ **Mapas Coropléticos**: Distribuição geográfica por estado
+- 🗺️ **Mapa por estado em 2D e 3D**: zoom, giro e inclinação, dica ao passar o mouse e clique para fixar um estado. O MapLibre e a malha dos estados (IBGE, simplificada) ficam em `static/` e são servidos pelo próprio Streamlit (`enableStaticServing`), então o mapa funciona sem internet e os dados não saem do computador
 - 🥧 **Gráficos de Pizza**: Participação percentual
 - 📋 **Tabelas Dinâmicas**: Dados detalhados com ordenação e filtros
 

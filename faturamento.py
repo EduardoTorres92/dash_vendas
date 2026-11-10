@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from conversoes import para_data
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
@@ -47,6 +48,7 @@ ui.aplicar_tema()
 ### Fonte de dados
 # Arquivos enviados pela tela inicial (dados reais, só em memória) ou demonstração.
 import fonte_dados
+import mapa_estados
 
 COLUNAS_RELATORIO = (
     etl_faturamento.COLUNAS_FATURAMENTO
@@ -141,12 +143,12 @@ else:
 # Garantir que a coluna de data está no formato datetime e filtrar por mês selecionado no menu lateral
 if 'Dt Emis NF' in faturado.columns and len(faturado) > 0:
     # Converter para datetime e normalizar
-    faturado['Dt Emis NF'] = pd.to_datetime(faturado['Dt Emis NF'], format='%d/%m/%y', errors='coerce').dt.normalize()
+    faturado['Dt Emis NF'] = para_data(faturado['Dt Emis NF']).dt.normalize()
     faturado = faturado.dropna(subset=['Dt Emis NF'])
 
     # Padronizar a coluna de data nas devoluções também, se existir
     if 'Dt Emis NF' in df_devolucao_card.columns and len(df_devolucao_card) > 0:
-        df_devolucao_card['Dt Emis NF'] = pd.to_datetime(df_devolucao_card['Dt Emis NF'], format='%d/%m/%y', errors='coerce').dt.normalize()
+        df_devolucao_card['Dt Emis NF'] = para_data(df_devolucao_card['Dt Emis NF']).dt.normalize()
         df_devolucao_card = df_devolucao_card.dropna(subset=['Dt Emis NF'])
 
     if len(faturado) > 0:
@@ -415,7 +417,7 @@ def calcular_variacoes_mes_anterior_todas_marcas(faturamento_por_marca, tipo_fil
             return {marca: 0.0 for marca in faturamento_por_marca['Marca']}
             
         # Converter datas apenas uma vez
-        faturado_completo['Dt Emis NF'] = pd.to_datetime(faturado_completo['Dt Emis NF'], format='%d/%m/%y', errors='coerce').dt.normalize()
+        faturado_completo['Dt Emis NF'] = para_data(faturado_completo['Dt Emis NF']).dt.normalize()
         faturado_completo = faturado_completo.dropna(subset=['Dt Emis NF'])
         
         # Determinar mês anterior
@@ -1343,104 +1345,24 @@ with tab_estado:
         total_faturamento_estados = estados_consolidados['Valor Total'].sum()
         st.info(f"**Total de Faturamento por Estado:** {formatar_valor_seguro(total_faturamento_estados, 'currency')}")
 
-        def carregar_dados_geojson():
-            """
-            Carrega os dados do arquivo br_states.json (GeoJSON dos estados brasileiros)
-            """
-            try:
-                current_dir = os.path.dirname(os.path.abspath(__file__))
-                # O arquivo br_states.json está na raiz do projeto
-                geojson_path = os.path.join(current_dir, 'br_states.json')
-                
-                with open(geojson_path, 'r', encoding='utf-8') as f:
-                    geojson_data = json.load(f)
-                
-                return geojson_data
-            except Exception as e:
-                st.error(f"Erro ao carregar dados do GeoJSON: {e}")
-                return None
+        # Mapa MapLibre (2D/3D), servido localmente: ver mapa_estados.py
+        col_mapa, col_tabela = st.columns([2, 1])
 
-        def criar_mapa_coropletico(estados_consolidados):
-            """
-            Cria um mapa coroplético dos estados brasileiros baseado no valor de faturamento
-            """
-            # Carregar dados do GeoJSON
-            geojson_data = carregar_dados_geojson()
-            
-            if geojson_data is None:
-                return None
-            
-            # Criar dicionário com dados dos estados para o mapa
-            estados_map = {}
-            for _, estado in estados_consolidados.iterrows():
-                estados_map[estado['Estado']] = {
-                    'Qtd NFs': estado['Qtd NFs'],
-                    'Valor Total': estado['Valor Total'],
-                    'Qtd Total': estado['Qtd Total']
-                }
-            
-            # Criar o mapa coroplético baseado no valor total de faturamento por estado
-            # Plotly >= 5.24 usa Choroplethmap (MapLibre); versões anteriores, Choroplethmapbox
-            usa_maplibre = hasattr(go, "Choroplethmap")
-            trace_mapa = go.Choroplethmap if usa_maplibre else go.Choroplethmapbox
-            prefixo_mapa = "map" if usa_maplibre else "mapbox"
-            fig = go.Figure(trace_mapa(
-                geojson=geojson_data,
-                locations=list(estados_map.keys()),
-                z=[estados_map[estado]['Valor Total'] for estado in estados_map.keys()],
-                colorscale=[[0, '#EFF6FF'], [0.5, '#60A5FA'], [1, '#1E3A8A']],
-                colorbar=dict(title=dict(text="Faturamento (R$)", font=dict(size=11)), thickness=12, outlinewidth=0),
-                hovertemplate="<b>%{location}</b><br>" +
-                             "Valor Total: R$ %{z:,.2f}<br>" +
-                             "Qtd NFs: %{customdata[0]:,.0f}<br>" +
-                             "Qtd Total: %{customdata[1]:,.0f}<br>" +
-                             "<extra></extra>",
-                customdata=[[estados_map[estado]['Qtd NFs'], estados_map[estado]['Qtd Total']] for estado in estados_map.keys()],
-                marker_opacity=0.9,
-                marker_line_width=1,
-                marker_line_color='white'
-            ))
-            
-            # Configurar layout do mapa com fundo branco
-            fig.update_layout(
-                **{
-                    f"{prefixo_mapa}_style": "white-bg",
-                    f"{prefixo_mapa}_zoom": 3.2,
-                    f"{prefixo_mapa}_center": {"lat": -14.2350, "lon": -51.9253},
-                },
-                margin={"r": 8, "t": 48, "l": 8, "b": 8},
-                height=600,
-                title={'text': "Distribuição de faturamento por estado"},
-            )
-            
-            return fig
+        with col_mapa:
+            mapa_estados.mapa_estados(estados_consolidados)
 
-        # Criar o mapa coroplético
-        mapa_coropletico = criar_mapa_coropletico(estados_consolidados)
-        
-        if mapa_coropletico:
-            # Layout em duas colunas
-            col_mapa, col_tabela = st.columns([2, 1])
-            
-            with col_mapa:
-                st.plotly_chart(mapa_coropletico, use_container_width=True)
-            
-            with col_tabela:
-                # Mostrar tabela de resumo por estado
-                st.subheader("Resumo por Estado")
-                
-                
-                # Calcular percentual do total
-                total_faturamento_estados = estados_consolidados['Valor Total'].sum()
-                estados_consolidados['Percentual'] = (estados_consolidados['Valor Total'] / total_faturamento_estados * 100).round(2)
-                
-                # Preparar dados para exibição
-                df_exibicao_estados = estados_consolidados[['Estado', 'Valor Total', 'Qtd NFs', 'Qtd Total', 'Percentual']].copy()
-                df_exibicao_estados.columns = ['Estado', 'Valor Total', 'Qtd NFs', 'Qtd Total', '% do Total']
-                
-                ui.tabela(df_exibicao_estados, hide_index=True)
-        else:
-            st.warning("Não foi possível carregar o mapa. Verifique se o arquivo br_states.json está disponível.")
+        with col_tabela:
+            st.subheader("Resumo por Estado")
+
+            # Calcular percentual do total
+            total_faturamento_estados = estados_consolidados['Valor Total'].sum()
+            estados_consolidados['Percentual'] = (estados_consolidados['Valor Total'] / total_faturamento_estados * 100).round(2)
+
+            # Preparar dados para exibição
+            df_exibicao_estados = estados_consolidados[['Estado', 'Valor Total', 'Qtd NFs', 'Qtd Total', 'Percentual']].copy()
+            df_exibicao_estados.columns = ['Estado', 'Valor Total', 'Qtd NFs', 'Qtd Total', '% do Total']
+
+            ui.tabela(df_exibicao_estados, hide_index=True)
     else:
         st.warning("Coluna 'Estado' não encontrada nos dados para criar o mapa.")
 
